@@ -58,14 +58,21 @@ tr.winner td{background:rgba(43,213,118,.06)}
 </head>
 <body>
 
-<h1>FTMO BACKTEST LAB <span style="color:var(--txt)">V4</span></h1>
-<div class="sub">EUR/USD · CINCO HIPÓTESIS PRE-REGISTRADAS · MISMA VARA</div>
+<h1>FTMO BACKTEST LAB <span style="color:var(--txt)">V5</span></h1>
+<div class="sub">EUR/USD · PRUEBA MULTI-PAR · REGLAS CONGELADAS · DATOS VÍRGENES</div>
 
 <div class="panel">
   <div class="ph"><h2>1 · Datos históricos</h2><span class="s" id="dataMeta">sin datos</span></div>
+  <label>API key TwelveData</label><input id="apiKey" type="password" placeholder="tu clave">
   <div class="grid2">
-    <div><label>API key TwelveData</label><input id="apiKey" type="password" placeholder="tu clave"></div>
-    <div><label>Periodo M15 (estrategias A–C)</label>
+    <div><label>Par</label>
+      <select id="symbol">
+        <option value="GBP/USD" selected>GBP/USD (virgen)</option>
+        <option value="AUD/USD">AUD/USD (virgen)</option>
+        <option value="USD/CAD">USD/CAD (virgen)</option>
+        <option value="EUR/USD">EUR/USD (ya usado)</option>
+      </select></div>
+    <div><label>Periodo M15</label>
       <select id="period">
         <option value="12">1 año (~6 llamadas)</option>
         <option value="24">2 años (~11 llamadas)</option>
@@ -162,17 +169,18 @@ tr.winner td{background:rgba(43,213,118,.06)}
    ============================================================ */
 const $=id=>document.getElementById(id);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let M15=null, CTX=null, D1L=null;
+let M15=null, CTX=null, D1L=null, LOADSYM='';
 
 const DESC={
   d1trend:'Sistema publicado (canal de Donchian / Turtle System 1), reglas fijas: COMPRA cuando el cierre diario supera el máximo de los últimos 20 días; VENTA cuando rompe el mínimo de 20 días. Stop inicial a 2×ATR(20). Salida cuando el cierre cruza el extremo opuesto de 10 días (trailing). Una posición a la vez, se deja correr días o semanas. Usa ~20 años de velas D1. Es el tipo de estrategia donde la literatura académica sí ha documentado ventaja neta de costos en forex.',
-  viper:'Hipótesis externa (case study Viper), reglas fijadas antes de ver resultados: 1) liquidity grab — una vela M15 barre con la mecha el último swing low y cierra de regreso arriba; 2) BOS alcista — cierre sobre el último swing high dentro de las 16 velas siguientes; 3) retorno al descuento — retroceso al 50% de la pierna (grab→BOS) dentro de 16 velas: ahí está la entrada, con SL bajo el mínimo del grab. Simétrico para cortos. Gestión idéntica a las demás. Nota: el PDF presume SL de 1 pip; aquí se usa SL estructural realista porque con spread un stop de 1 pip es ruido garantizado.',
+  viper:'Hipótesis externa (case study Viper), reglas fijadas antes de ver resultados: 1) liquidity grab — una vela M15 barre con la mecha el último swing low y cierra de regreso arriba; 2) BOS alcista — cierre sobre el último swing high dentro de las 16 velas siguientes; 3) retorno al descuento — retroceso al 50% de la pierna (grab→BOS) dentro de 16 velas: ahí está la entrada, con SL bajo el mínimo del grab. Simétrico para cortos. Gestión idéntica a las demás. Nota: el PDF presume SL de 1 pip; aquí se usa SL estructural realista porque con spread un stop de 1 pip es ruido garantizado. PRUEBA MULTI-PAR PRE-REGISTRADA: las reglas quedan congeladas; si E logra PF fuera ≥ 1.1 en al menos 2 de 3 pares vírgenes (GBP/USD, AUD/USD, USD/CAD), pasa a demo 8 semanas; si no, se archiva.',
   rango:'Reglas fijas: se mide el máximo y mínimo de la sesión asiática (00:00–07:00 UTC). Entre 07:00 y 11:00 UTC, si una vela M15 cierra fuera del rango, se entra en esa dirección. SL al lado opuesto del rango (rango válido: 8–45 pips). Máximo 1 trade al día.',
   pullback:'Reglas fijas: el sesgo lo da el D1 cerrado (EMA20 vs EMA50). Solo se opera a favor de ese sesgo cuando el precio retrocede a la EMA20 de H1 y la vela M15 cierra de regreso en la dirección de la tendencia. SL bajo/sobre el último swing M15. Pausa de 8 velas entre entradas.',
   score:'La original del Command Center: score ponderado M15/H1/H4/D1 con EMA, RSI, BOS, estructura, FVG y sweeps. Entra cuando score y gap superan el umbral con H1+H4 alineados. Ya sabemos cómo le fue — queda como línea base.'
 };
 $('stratDesc').textContent=DESC[$('strat').value];
 $('strat').onchange=()=>$('stratDesc').textContent=DESC[$('strat').value];
+$('symbol') && ($('symbol').onchange=()=>{ M15=null; CTX=null; D1L=null; $('btnRun').disabled=true; $('btnCompare').disabled=true; $('dataMeta').textContent='sin datos'; $('pbar').style.width='0%'; $('status').textContent='Par cambiado a '+$('symbol').value+': descarga las velas de nuevo.'; });
 
 /* ---------- Descarga paginada ---------- */
 async function loadData(){
@@ -188,7 +196,7 @@ async function loadData(){
       call++;
       $('status').textContent=`Llamada ${call}/${est}… (respetando límite de 8/min)`;
       const end=cursor.toISOString().slice(0,19).replace('T',' ');
-      const r=await fetch(`https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=15min&outputsize=5000&timezone=UTC&end_date=${encodeURIComponent(end)}&apikey=${encodeURIComponent(key)}`);
+      const r=await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent($('symbol').value)}&interval=15min&outputsize=5000&timezone=UTC&end_date=${encodeURIComponent(end)}&apikey=${encodeURIComponent(key)}`);
       const j=await r.json();
       if(j.status==='error') throw new Error(j.message);
       const vals=j.values||[];
@@ -205,7 +213,7 @@ async function loadData(){
     if(M15.length<2000) throw new Error('Datos insuficientes ('+M15.length+' velas).');
     CTX=null;
     $('pbar').style.width='100%';
-    $('dataMeta').textContent=M15.length.toLocaleString()+' velas';
+    LOADSYM=$('symbol').value; $('dataMeta').textContent=LOADSYM+' · '+M15.length.toLocaleString()+' velas';
     $('status').textContent=`Listo: ${M15.length.toLocaleString()} velas desde ${new Date(M15[0].t).toLocaleDateString()}. Corre una estrategia o compara las tres.`;
     $('btnRun').disabled=false; $('btnCompare').disabled=false;
   }catch(e){ $('status').textContent='Error: '+e.message; }
@@ -217,7 +225,7 @@ async function loadD1(){
   $('btnLoadD1').disabled=true;
   try{
     $('status').textContent='Descargando ~20 años de velas diarias…';
-    const r=await fetch(`https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=1day&outputsize=5000&timezone=UTC&apikey=${encodeURIComponent(key)}`);
+    const r=await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent($('symbol').value)}&interval=1day&outputsize=5000&timezone=UTC&apikey=${encodeURIComponent(key)}`);
     const j=await r.json();
     if(j.status==='error') throw new Error(j.message);
     D1L=(j.values||[]).map(v=>{
@@ -534,7 +542,7 @@ function report(trades, acc, riskPct, splitT){
 /* ---------- Render detalle ---------- */
 function renderDetail(stratId, R){
   $('results').classList.remove('hidden');
-  $('resStrat').textContent=STRATS[stratId].name;
+  $('resStrat').textContent=STRATS[stratId].name+(LOADSYM?' · '+LOADSYM:'');
   const g=R.g, span=R.trades.length?Math.round((R.trades.at(-1).exitT-R.trades[0].t)/864e5):0;
   $('resMeta').textContent=`${span} días · ${(g.n/Math.max(1,span/30)).toFixed(1)} trades/mes`;
   $('rN').textContent=g.n;
