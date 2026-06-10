@@ -58,29 +58,33 @@ tr.winner td{background:rgba(43,213,118,.06)}
 </head>
 <body>
 
-<h1>FTMO BACKTEST LAB <span style="color:var(--txt)">V2</span></h1>
-<div class="sub">EUR/USD · TRES ESTRATEGIAS · MISMA VARA DE MEDIR</div>
+<h1>FTMO BACKTEST LAB <span style="color:var(--txt)">V3</span></h1>
+<div class="sub">EUR/USD · CUATRO HIPÓTESIS PRE-REGISTRADAS · MISMA VARA</div>
 
 <div class="panel">
   <div class="ph"><h2>1 · Datos históricos</h2><span class="s" id="dataMeta">sin datos</span></div>
   <div class="grid2">
     <div><label>API key TwelveData</label><input id="apiKey" type="password" placeholder="tu clave"></div>
-    <div><label>Periodo</label>
+    <div><label>Periodo M15 (estrategias A–C)</label>
       <select id="period">
         <option value="12">1 año (~6 llamadas)</option>
         <option value="24">2 años (~11 llamadas)</option>
         <option value="36" selected>3 años (~16 llamadas)</option>
       </select></div>
   </div>
-  <div style="margin-top:12px"><button class="btn" id="btnLoad">Descargar velas M15</button></div>
+  <div class="grid2" style="margin-top:12px">
+    <button class="btn" id="btnLoad">Descargar M15 (A–C)</button>
+    <button class="btn ghost" id="btnLoadD1">Descargar D1 · ~20 años (1 llamada)</button>
+  </div>
   <div class="prog"><i id="pbar"></i></div>
-  <div class="status" id="status">Se descargan una vez y quedan en memoria: todas las corridas posteriores son gratis.</div>
+  <div class="status" id="status">Se descargan una vez y quedan en memoria. La estrategia D usa velas diarias: una sola llamada trae ~20 años.</div>
 </div>
 
 <div class="panel">
   <div class="ph"><h2>2 · Estrategia y parámetros</h2></div>
   <label>Estrategia</label>
   <select id="strat">
+    <option value="d1trend" selected>D · Tendencia D1 (Donchian 20/10, sistema publicado)</option>
     <option value="rango">A · Ruptura del rango asiático (Londres)</option>
     <option value="pullback">B · Tendencia D1 + retroceso a EMA H1</option>
     <option value="score">C · Score multitimeframe (la original)</option>
@@ -99,7 +103,7 @@ tr.winner td{background:rgba(43,213,118,.06)}
   </div>
   <div class="grid2" style="margin-top:12px">
     <button class="btn" id="btnRun" disabled>Ejecutar backtest</button>
-    <button class="btn ghost" id="btnCompare" disabled>Comparar las 3</button>
+    <button class="btn ghost" id="btnCompare" disabled>Comparar todas</button>
   </div>
   <p class="note">Gestión idéntica en las tres para comparar justo: 50% del lote en TP1 (1R), 30% en TP2 (2R), 20% en TP3 (3R), SL primero en velas ambiguas, cierre forzado a 24h. Las reglas A y B están fijadas de antemano (sin perillas) precisamente para no sobreajustarlas.</p>
 </div>
@@ -137,7 +141,7 @@ tr.winner td{background:rgba(43,213,118,.06)}
 </div>
 
 <div class="panel">
-  <div class="ph"><h2>6 · Por sesión</h2></div>
+  <div class="ph"><h2 id="sessTitle">6 · Por sesión</h2></div>
   <table id="sessTable"></table>
 </div>
 
@@ -157,9 +161,10 @@ tr.winner td{background:rgba(43,213,118,.06)}
    ============================================================ */
 const $=id=>document.getElementById(id);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let M15=null, CTX=null;
+let M15=null, CTX=null, D1L=null;
 
 const DESC={
+  d1trend:'Sistema publicado (canal de Donchian / Turtle System 1), reglas fijas: COMPRA cuando el cierre diario supera el máximo de los últimos 20 días; VENTA cuando rompe el mínimo de 20 días. Stop inicial a 2×ATR(20). Salida cuando el cierre cruza el extremo opuesto de 10 días (trailing). Una posición a la vez, se deja correr días o semanas. Usa ~20 años de velas D1. Es el tipo de estrategia donde la literatura académica sí ha documentado ventaja neta de costos en forex.',
   rango:'Reglas fijas: se mide el máximo y mínimo de la sesión asiática (00:00–07:00 UTC). Entre 07:00 y 11:00 UTC, si una vela M15 cierra fuera del rango, se entra en esa dirección. SL al lado opuesto del rango (rango válido: 8–45 pips). Máximo 1 trade al día.',
   pullback:'Reglas fijas: el sesgo lo da el D1 cerrado (EMA20 vs EMA50). Solo se opera a favor de ese sesgo cuando el precio retrocede a la EMA20 de H1 y la vela M15 cierra de regreso en la dirección de la tendencia. SL bajo/sobre el último swing M15. Pausa de 8 velas entre entradas.',
   score:'La original del Command Center: score ponderado M15/H1/H4/D1 con EMA, RSI, BOS, estructura, FVG y sweeps. Entra cuando score y gap superan el umbral con H1+H4 alineados. Ya sabemos cómo le fue — queda como línea base.'
@@ -203,6 +208,22 @@ async function loadData(){
     $('btnRun').disabled=false; $('btnCompare').disabled=false;
   }catch(e){ $('status').textContent='Error: '+e.message; }
   finally{ $('btnLoad').disabled=false; }
+}
+async function loadD1(){
+  const key=$('apiKey').value.trim();
+  if(!key){ $('status').textContent='Pega tu API key de TwelveData.'; return; }
+  $('btnLoadD1').disabled=true;
+  try{
+    $('status').textContent='Descargando ~20 años de velas diarias…';
+    const r=await fetch(`https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=1day&outputsize=5000&timezone=UTC&apikey=${encodeURIComponent(key)}`);
+    const j=await r.json();
+    if(j.status==='error') throw new Error(j.message);
+    D1L=(j.values||[]).map(v=>({t:Date.parse(v.datetime.replace(' ','T')+'Z'), o:+v.open,h:+v.high,l:+v.low,c:+v.close})).sort((a,b)=>a.t-b.t);
+    if(D1L.length<1000) throw new Error('Datos D1 insuficientes ('+D1L.length+').');
+    $('status').textContent=`D1 listo: ${D1L.length.toLocaleString()} días desde ${new Date(D1L[0].t).getFullYear()}. Ya puedes correr la estrategia D.`;
+    $('btnRun').disabled=false; $('btnCompare').disabled=false;
+  }catch(e){ $('status').textContent='Error D1: '+e.message; }
+  finally{ $('btnLoadD1').disabled=false; }
 }
 
 /* ---------- Indicadores ---------- */
@@ -368,9 +389,46 @@ function stratScore(c,i,st){
   else{ const ref=isNaN(c.m15.lastHi[i])?px+2*a:c.m15.lastHi[i]; sl=Math.max(ref,px+1.2*a)+0.3*a; }
   return {side,entry:px,sl};
 }
-const STRATS={rango:{fn:stratRango,name:'A · Rango asiático'},
+const STRATS={d1trend:{name:'D · Donchian D1 20/10'},
+              rango:{fn:stratRango,name:'A · Rango asiático'},
               pullback:{fn:stratPullback,name:'B · D1 + retroceso'},
               score:{fn:stratScore,name:'C · Score MTF'}};
+
+/* ---------- Estrategia D: Donchian 20/10 sobre D1 (~20 años) ---------- */
+function simulateD1trend(){
+  const b=D1L, n=b.length, spread=(+$('pSpread').value||0)*0.0001;
+  const atr=atrArr(b,20);
+  // canales excluyendo la vela actual (sin lookahead)
+  const hi20=new Array(n).fill(NaN), lo20=new Array(n).fill(NaN),
+        hi10=new Array(n).fill(NaN), lo10=new Array(n).fill(NaN);
+  for(let i=21;i<n;i++){
+    let h20=-1e9,l20=1e9,h10=-1e9,l10=1e9;
+    for(let j=i-20;j<i;j++){ h20=Math.max(h20,b[j].h); l20=Math.min(l20,b[j].l); }
+    for(let j=i-10;j<i;j++){ h10=Math.max(h10,b[j].h); l10=Math.min(l10,b[j].l); }
+    hi20[i]=h20; lo20[i]=l20; hi10[i]=h10; lo10[i]=l10;
+  }
+  const trades=[]; let open=null;
+  for(let i=25;i<n;i++){
+    const bar=b[i];
+    if(open){
+      const buy=open.side==='B'; let exit=null;
+      if(buy && bar.l<=open.sl) exit=open.sl;          // stop primero (conservador)
+      else if(!buy && bar.h>=open.sl) exit=open.sl;
+      else if(buy && bar.c<lo10[i]) exit=bar.c;        // trailing: cierre bajo mínimo 10d
+      else if(!buy && bar.c>hi10[i]) exit=bar.c;
+      if(exit!=null){
+        open.r=((exit-open.entry)/open.risk)*(buy?1:-1) - spread/open.risk;
+        open.exitT=bar.t; trades.push(open); open=null;
+      }
+      continue;
+    }
+    const a=atr[i]; if(!a) continue;
+    if(bar.c>hi20[i]){ open={i,t:bar.t,side:'B',entry:bar.c,sl:bar.c-2*a,risk:2*a,r:0}; }
+    else if(bar.c<lo20[i]){ open={i,t:bar.t,side:'S',entry:bar.c,sl:bar.c+2*a,risk:2*a,r:0}; }
+  }
+  if(open){ const last=b[n-1]; open.r=((last.c-open.entry)/open.risk)*(open.side==='B'?1:-1)-spread/open.risk; open.exitT=last.t; trades.push(open); }
+  return trades;
+}
 
 /* ---------- Simulador (idéntico para las tres) ---------- */
 function simulate(stratId){
@@ -414,8 +472,8 @@ function stats(ts){
   return {n:ts.length, wr:ts.length?w/ts.length*100:0, pf:gl>0?gw/gl:(gw>0?Infinity:0), exp:ts.length?sumR/ts.length:0};
 }
 const fmtPF=x=>x===Infinity?'∞':x.toFixed(2);
-function report(trades, acc, riskPct){
-  const splitT = M15[Math.floor(M15.length*0.7)].t;
+function report(trades, acc, riskPct, splitT){
+  if(splitT==null) splitT = M15[Math.floor(M15.length*0.7)].t;
   let bal=acc, peak=acc, maxDD=0; const eq=[{t:trades[0]?.t||0,v:acc}];
   let passes=0, fails=0, attStart=acc, dayKey='', dayStart=acc, passDays=[], attStartT=trades[0]?.exitT;
   for(const t of trades){
@@ -466,12 +524,23 @@ function renderDetail(stratId, R){
     <div class="kpi"><div class="l">Quemados</div><div class="v t-bear">${R.fails}</div></div>
   </div>
   <p class="note">${R.passes?`Días promedio para aprobar: <b>${Math.round(R.passDays.reduce((x,y)=>x+y,0)/R.passDays.length)}</b>. `:''}Riesgo ${(R.riskPct*100).toFixed(1)}% por trade, cuenta $${R.acc.toLocaleString()}, sin filtro de noticias ni slippage extremo.</p>`;
-  const sess=[['Asia (00–07 UTC)',0,7],['Londres (07–12)',7,12],['LDN+NY (12–16)',12,16],['NY (16–21)',16,21],['Tarde NY (21–24)',21,24]];
-  $('sessTable').innerHTML='<tr><th>Sesión</th><th>Trades</th><th>WR</th><th>Exp (R)</th></tr>'+sess.map(([nm,h0,h1])=>{
-    const ts=R.trades.filter(t=>{const h=new Date(t.t).getUTCHours();return h>=h0&&h<h1;});
-    const s=stats(ts);
-    return `<tr><td>${nm}</td><td>${s.n}</td><td>${s.n?s.wr.toFixed(0)+'%':'—'}</td><td class="${s.exp>=0?'t-bull':'t-bear'}">${s.n?s.exp.toFixed(2):'—'}</td></tr>`;
-  }).join('');
+  if(stratId==='d1trend'){
+    $('sessTitle').textContent='6 · Por año';
+    const byYear={};
+    for(const t of R.trades){ const y=new Date(t.t).getUTCFullYear(); (byYear[y]=byYear[y]||[]).push(t); }
+    $('sessTable').innerHTML='<tr><th>Año</th><th>Trades</th><th>WR</th><th>Suma (R)</th></tr>'+Object.keys(byYear).sort().map(y=>{
+      const s=stats(byYear[y]); const sum=byYear[y].reduce((a,t)=>a+t.r,0);
+      return `<tr><td>${y}</td><td>${s.n}</td><td>${s.wr.toFixed(0)}%</td><td class="${sum>=0?'t-bull':'t-bear'}">${sum>=0?'+':''}${sum.toFixed(1)}</td></tr>`;
+    }).join('');
+  }else{
+    $('sessTitle').textContent='6 · Por sesión';
+    const sess=[['Asia (00–07 UTC)',0,7],['Londres (07–12)',7,12],['LDN+NY (12–16)',12,16],['NY (16–21)',16,21],['Tarde NY (21–24)',21,24]];
+    $('sessTable').innerHTML='<tr><th>Sesión</th><th>Trades</th><th>WR</th><th>Exp (R)</th></tr>'+sess.map(([nm,h0,h1])=>{
+      const ts=R.trades.filter(t=>{const h=new Date(t.t).getUTCHours();return h>=h0&&h<h1;});
+      const s=stats(ts);
+      return `<tr><td>${nm}</td><td>${s.n}</td><td>${s.n?s.wr.toFixed(0)+'%':'—'}</td><td class="${s.exp>=0?'t-bull':'t-bear'}">${s.n?s.exp.toFixed(2):'—'}</td></tr>`;
+    }).join('');
+  }
   const v=$('verdict'); let cls,txt;
   if(g.n<30){ cls='mixed'; txt=`<b class="title">MUESTRA INSUFICIENTE</b>Solo ${g.n} trades: amplía el periodo antes de concluir nada.`; }
   else if(R.b.n>=30&&R.b.pf>=1.2&&R.b.exp>0){ cls='good'; txt=`<b class="title">EDGE PLAUSIBLE — VALIDAR EN DEMO</b>Fuera de muestra: PF ${fmtPF(R.b.pf)}, expectancy +${R.b.exp.toFixed(2)}R en ${R.b.n} trades. Siguiente paso correcto: 4–8 semanas en demo con el semáforo de noticias activo antes de pagar un challenge. Esto sigue sin ser garantía.`; }
@@ -486,11 +555,18 @@ function renderDetail(stratId, R){
 function runCompare(){
   const acc=+$('pAcc').value, riskPct=+$('pRisk').value/100;
   const rows=[];
-  for(const id of ['rango','pullback','score']){
-    const R=report(simulate(id), acc, riskPct);
-    const pass = R.b.n>=30 && R.b.pf>=1.2 && R.b.exp>0;
-    rows.push({id,R,pass});
+  if(D1L){
+    const tr=simulateD1trend();
+    const R=report(tr, acc, riskPct, D1L[Math.floor(D1L.length*0.7)].t);
+    rows.push({id:'d1trend',R,pass: R.b.n>=30 && R.b.pf>=1.2 && R.b.exp>0});
   }
+  if(M15){
+    for(const id of ['rango','pullback','score']){
+      const R=report(simulate(id), acc, riskPct);
+      rows.push({id,R,pass: R.b.n>=30 && R.b.pf>=1.2 && R.b.exp>0});
+    }
+  }
+  if(!rows.length){ $('status').textContent='Descarga datos primero (M15 para A–C, D1 para D).'; return; }
   $('cmpPanel').classList.remove('hidden');
   $('cmpTable').innerHTML=`<tr><th>Estrategia</th><th>Trades</th><th>PF total</th><th>PF fuera</th><th>Exp fuera</th><th>FTMO ✓/✗</th><th>Filtro</th></tr>`+
     rows.map(r=>`<tr class="${r.pass?'winner':''}">
@@ -499,20 +575,28 @@ function runCompare(){
       <td class="${r.R.b.pf>=1?'t-bull':'t-bear'}"><b>${fmtPF(r.R.b.pf)}</b></td>
       <td class="${r.R.b.exp>=0?'t-bull':'t-bear'}">${r.R.b.exp.toFixed(2)}</td>
       <td>${r.R.passes}/${r.R.fails}</td>
-      <td>${r.pass?'<span class="t-bull">PASA</span>':'<span class="t-bear">NO</span>'}</td></tr>`).join('');
+      <td>${r.pass?'<span class="t-bull">PASA</span>':'<span class="t-bear">NO</span>'}</td></tr>`).join('')+
+    (D1L?'':'<tr><td colspan="7" class="t-dim">Estrategia D no incluida: descarga las velas D1 primero.</td></tr>');
   const best=rows.find(r=>r.pass);
   renderDetail(best?best.id:rows[0].id, best?best.R:rows[0].R);
-  if(best) $('strat').value=best.id, $('stratDesc').textContent=DESC[best.id];
+  if(best){ $('strat').value=best.id; $('stratDesc').textContent=DESC[best.id]; }
 }
 
 $('btnLoad').onclick=loadData;
+$('btnLoadD1').onclick=loadD1;
 $('btnRun').onclick=()=>{ $('btnRun').textContent='Calculando…'; setTimeout(()=>{
-  const id=$('strat').value;
-  renderDetail(id, report(simulate(id), +$('pAcc').value, +$('pRisk').value/100));
+  const id=$('strat').value, acc=+$('pAcc').value, riskPct=+$('pRisk').value/100;
+  if(id==='d1trend'){
+    if(!D1L){ $('status').textContent='Para la estrategia D descarga primero las velas D1 (botón derecho del paso 1).'; }
+    else renderDetail(id, report(simulateD1trend(), acc, riskPct, D1L[Math.floor(D1L.length*0.7)].t));
+  }else{
+    if(!M15){ $('status').textContent='Para A–C descarga primero las velas M15.'; }
+    else renderDetail(id, report(simulate(id), acc, riskPct));
+  }
   $('btnRun').textContent='Ejecutar backtest';
 },50); };
 $('btnCompare').onclick=()=>{ $('btnCompare').textContent='Comparando…'; setTimeout(()=>{
-  runCompare(); $('btnCompare').textContent='Comparar las 3';
+  runCompare(); $('btnCompare').textContent='Comparar todas';
 },50); };
 </script>
 </body>
