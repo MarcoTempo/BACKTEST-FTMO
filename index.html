@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>FTMO Backtest Lab — EUR/USD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0B0F14;--panel:#121822;--panel2:#0E1420;--line:#1E2735;
+  --txt:#D7DEE8;--dim:#8A94A6;--amber:#FFB000;--bull:#2BD576;--bear:#FF4D5E;--warn:#FFC83D;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;--disp:'Barlow Condensed',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:var(--mono);font-size:13px;line-height:1.45;padding:14px;max-width:760px;margin:0 auto}
+::selection{background:var(--amber);color:#000}
+button{font-family:var(--mono);cursor:pointer}
+input,select{font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:9px 10px;font-size:13px;width:100%}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+label{display:block;color:var(--dim);font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin:10px 0 4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+h1{font-family:var(--disp);font-weight:700;font-size:20px;letter-spacing:.10em;color:var(--amber)}
+.sub{font-family:var(--disp);font-size:14px;letter-spacing:.12em;color:var(--dim)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:14px 0}
+.ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.ph h2{font-family:var(--disp);font-size:15px;font-weight:600;letter-spacing:.14em;color:var(--amber);text-transform:uppercase}
+.ph .s{font-size:10px;color:var(--dim)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.kgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.kpi .l{font-size:10px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.kpi .v{font-size:15px;font-weight:600;margin-top:2px}
+.btn{background:var(--amber);color:#000;border:0;border-radius:8px;padding:11px 16px;font-weight:700;font-size:13px;width:100%}
+.btn.ghost{background:transparent;color:var(--amber);border:1px solid var(--amber)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.t-bull{color:var(--bull)}.t-bear{color:var(--bear)}.t-dim{color:var(--dim)}.t-warn{color:var(--warn)}
+.prog{height:10px;border-radius:5px;background:#1A2230;overflow:hidden;margin-top:8px}
+.prog i{display:block;height:100%;background:var(--amber);width:0%;transition:width .3s}
+.status{font-size:11px;color:var(--dim);margin-top:6px;min-height:16px}
+canvas{width:100%;height:200px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+th{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:right;padding:5px 6px;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+td{padding:6px;text-align:right;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+.note{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.55}
+.verdict{border-radius:8px;padding:12px;font-size:12.5px;margin-top:10px;border:1px solid var(--line);line-height:1.6}
+.verdict.good{border-color:rgba(43,213,118,.45)}
+.verdict.bad{border-color:rgba(255,77,94,.5)}
+.verdict.mixed{border-color:rgba(255,200,61,.5)}
+.verdict b.title{font-family:var(--disp);letter-spacing:.1em;font-size:15px;display:block;margin-bottom:4px}
+hr.sep{border:0;border-top:1px dashed var(--line);margin:12px 0}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<h1>FTMO BACKTEST LAB</h1>
+<div class="sub">EUR/USD · VALIDACIÓN DE LA ESTRATEGIA DEL COMMAND CENTER</div>
+
+<div class="panel">
+  <div class="ph"><h2>1 · Datos históricos</h2><span class="s" id="dataMeta">sin datos</span></div>
+  <div class="grid2">
+    <div><label>API key TwelveData</label><input id="apiKey" type="password" placeholder="tu clave"></div>
+    <div><label>Periodo</label>
+      <select id="period">
+        <option value="6">6 meses (~3 llamadas)</option>
+        <option value="12" selected>1 año (~6 llamadas)</option>
+        <option value="24">2 años (~11 llamadas)</option>
+        <option value="36">3 años (~16 llamadas)</option>
+      </select></div>
+  </div>
+  <div style="margin-top:12px"><button class="btn" id="btnLoad">Descargar velas M15</button></div>
+  <div class="prog"><i id="pbar"></i></div>
+  <div class="status" id="status">Las velas se descargan una vez y quedan en memoria: después puedes re-testear con otros parámetros sin gastar API.</div>
+</div>
+
+<div class="panel">
+  <div class="ph"><h2>2 · Parámetros</h2><span class="s">los mismos del motor de señales</span></div>
+  <div class="grid3">
+    <div><label>Score mínimo</label><input id="pThr" type="number" value="72" min="50" max="95"></div>
+    <div><label>Gap mínimo</label><input id="pGap" type="number" value="25" min="5" max="60"></div>
+    <div><label>Riesgo/trade %</label><input id="pRisk" type="number" value="0.5" step="0.1" min="0.1" max="2"></div>
+  </div>
+  <div class="grid3">
+    <div><label>Cuenta FTMO</label>
+      <select id="pAcc"><option value="10000">10k</option><option value="25000">25k</option><option value="50000">50k</option><option value="100000" selected>100k</option><option value="200000">200k</option></select></div>
+    <div><label>SL→BE tras TP1</label><select id="pBe"><option value="1" selected>Sí</option><option value="0">No</option></select></div>
+    <div><label>Spread (pips)</label><input id="pSpread" type="number" value="0.3" step="0.1" min="0"></div>
+  </div>
+  <div style="margin-top:12px"><button class="btn ghost" id="btnRun" disabled>Ejecutar backtest</button></div>
+  <p class="note">Gestión simulada: 50% del lote sale en TP1 (1R), 30% en TP2 (2R), 20% en TP3 (3R). Si vela toca SL y TP a la vez, se asume SL primero (criterio conservador). El filtro de noticias NO se puede backtestear (no hay calendario histórico gratuito), así que los resultados reales con semáforo deberían ser iguales o mejores en eventos macro.</p>
+</div>
+
+<div id="results" class="hidden">
+
+<div class="panel">
+  <div class="ph"><h2>3 · Resultados globales</h2><span class="s" id="resMeta">—</span></div>
+  <div class="kgrid">
+    <div class="kpi"><div class="l">Trades</div><div class="v" id="rN">—</div></div>
+    <div class="kpi"><div class="l">Win rate</div><div class="v" id="rWr">—</div></div>
+    <div class="kpi"><div class="l">Profit factor</div><div class="v" id="rPf">—</div></div>
+    <div class="kpi"><div class="l">Expectancy</div><div class="v" id="rExp">—</div></div>
+    <div class="kpi"><div class="l">Retorno total</div><div class="v" id="rRet">—</div></div>
+    <div class="kpi"><div class="l">Max drawdown</div><div class="v" id="rDd">—</div></div>
+  </div>
+  <label style="margin-top:12px">Curva de equity</label>
+  <canvas id="eqCanvas" width="700" height="200"></canvas>
+</div>
+
+<div class="panel">
+  <div class="ph"><h2>4 · Dentro vs fuera de muestra</h2><span class="s">70% / 30% cronológico</span></div>
+  <table id="oosTable"></table>
+  <p class="note">La mitad <b>fuera de muestra</b> (el 30% más reciente, que no se usó para diseñar nada) es la única cifra que se acerca a lo que verías en vivo. Si dentro de muestra gana y fuera pierde, la estrategia está sobreajustada.</p>
+</div>
+
+<div class="panel">
+  <div class="ph"><h2>5 · Simulación FTMO</h2><span class="s">¿habría pasado el challenge?</span></div>
+  <div id="ftmoSim"></div>
+</div>
+
+<div class="panel">
+  <div class="ph"><h2>6 · Por sesión</h2></div>
+  <table id="sessTable"></table>
+</div>
+
+<div class="panel">
+  <div class="ph"><h2>Veredicto</h2></div>
+  <div id="verdict" class="verdict"></div>
+</div>
+
+</div>
+
+<script>
+/* ============================================================
+   FTMO BACKTEST LAB — valida las reglas del Command Center
+   Base: velas M15 reales · H1/H4/D1 resampleadas (sin lookahead)
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let M15=null; // velas crudas [{t,o,h,l,c}] cronológicas
+
+/* ---------- 1. Descarga paginada ---------- */
+async function loadData(){
+  const key=$('apiKey').value.trim();
+  if(!key){ $('status').textContent='Pega tu API key de TwelveData.'; return; }
+  const months=+$('period').value;
+  const startTs=Date.now()-months*30.44*864e5;
+  const est=Math.ceil(months*0.6)+1;
+  $('btnLoad').disabled=true; $('btnRun').disabled=true;
+  let cursor=new Date(), all=[], call=0;
+  try{
+    while(true){
+      call++;
+      $('status').textContent=`Llamada ${call}/${est}… (respetando límite de 8/min)`;
+      const end=cursor.toISOString().slice(0,19).replace('T',' ');
+      const r=await fetch(`https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=15min&outputsize=5000&timezone=UTC&end_date=${encodeURIComponent(end)}&apikey=${encodeURIComponent(key)}`);
+      const j=await r.json();
+      if(j.status==='error') throw new Error(j.message);
+      const vals=j.values||[];
+      for(const v of vals) all.push({t:Date.parse(v.datetime.replace(' ','T')+'Z'), o:+v.open,h:+v.high,l:+v.low,c:+v.close});
+      const oldest=all.length? Math.min(...vals.map(v=>Date.parse(v.datetime.replace(' ','T')+'Z'))) : 0;
+      $('pbar').style.width=Math.min(100,(Date.now()-oldest)/(Date.now()-startTs)*100)+'%';
+      if(!vals.length || vals.length<5000 || oldest<=startTs) break;
+      cursor=new Date(oldest-60000);
+      await sleep(8500);
+    }
+    const seen=new Set();
+    M15=all.filter(b=>{ if(b.t<startTs||seen.has(b.t))return false; seen.add(b.t); return true; })
+           .sort((a,b)=>a.t-b.t);
+    if(M15.length<2000) throw new Error('Datos insuficientes ('+M15.length+' velas).');
+    $('pbar').style.width='100%';
+    $('dataMeta').textContent=M15.length.toLocaleString()+' velas';
+    $('status').textContent=`Listo: ${M15.length.toLocaleString()} velas M15 desde ${new Date(M15[0].t).toLocaleDateString()}. Ya puedes backtestear sin gastar API.`;
+    $('btnRun').disabled=false;
+  }catch(e){
+    $('status').textContent='Error: '+e.message;
+  }finally{ $('btnLoad').disabled=false; }
+}
+
+/* ---------- 2. Resampleo + indicadores precalculados ---------- */
+function resample(src, ms){
+  const out=[], map=new Array(src.length); // map[i] = índice del ÚLTIMO bar CERRADO de la serie alta
+  let cur=null;
+  for(let i=0;i<src.length;i++){
+    const b=src[i], bucket=Math.floor(b.t/ms)*ms;
+    if(!cur || cur.t!==bucket){
+      if(cur) out.push(cur);
+      cur={t:bucket,o:b.o,h:b.h,l:b.l,c:b.c};
+    }else{ cur.h=Math.max(cur.h,b.h); cur.l=Math.min(cur.l,b.l); cur.c=b.c; }
+    map[i]=out.length-1; // -1 si aún no hay bar cerrado
+  }
+  if(cur) out.push(cur);
+  return {bars:out,map};
+}
+function emaArr(cl,p){const k=2/(p+1);const o=new Array(cl.length);o[0]=cl[0];for(let i=1;i<cl.length;i++)o[i]=cl[i]*k+o[i-1]*(1-k);return o;}
+function rsiArr(cl,p=14){
+  const o=new Array(cl.length).fill(50); let g=0,l=0;
+  for(let i=1;i<cl.length;i++){
+    const d=cl[i]-cl[i-1], up=Math.max(d,0), dn=Math.max(-d,0);
+    if(i<=p){ g+=up; l+=dn; if(i===p){g/=p;l/=p;o[i]=l===0?100:100-100/(1+g/l);} }
+    else{ g=(g*(p-1)+up)/p; l=(l*(p-1)+dn)/p; o[i]=l===0?100:100-100/(1+g/l); }
+  }
+  return o;
+}
+function atrArr(b,p=14){
+  const o=new Array(b.length).fill(0);
+  for(let i=1;i<b.length;i++){
+    const tr=Math.max(b[i].h-b[i].l,Math.abs(b[i].h-b[i-1].c),Math.abs(b[i].l-b[i-1].c));
+    o[i]= i<=p ? (o[i-1]*(i-1)+tr)/i : (o[i-1]*(p-1)+tr)/p;
+  }
+  return o;
+}
+function prep(bars){
+  const n=bars.length, cl=bars.map(b=>b.c);
+  const e20=emaArr(cl,20), e50=emaArr(cl,50), rsi=rsiArr(cl), atr=atrArr(bars);
+  // fractales k=2, confirmados con retraso de 2 velas (sin lookahead)
+  const k=2, lastHi=new Array(n).fill(NaN), prevHi=new Array(n).fill(NaN),
+        lastLo=new Array(n).fill(NaN), prevLo=new Array(n).fill(NaN);
+  const fr=[]; // {i,type,p}
+  for(let i=k;i<n-k;i++){
+    let H=true,L=true;
+    for(let j=1;j<=k;j++){
+      if(bars[i].h<=bars[i-j].h||bars[i].h<=bars[i+j].h)H=false;
+      if(bars[i].l>=bars[i-j].l||bars[i].l>=bars[i+j].l)L=false;
+    }
+    if(H)fr.push({i,type:'h',p:bars[i].h});
+    if(L)fr.push({i,type:'l',p:bars[i].l});
+  }
+  fr.sort((a,b)=>a.i-b.i);
+  let fi=0, lh=NaN,ph=NaN,ll=NaN,pl=NaN;
+  for(let i=0;i<n;i++){
+    while(fi<fr.length && fr[fi].i+k<=i){
+      if(fr[fi].type==='h'){ph=lh;lh=fr[fi].p;} else {pl=ll;ll=fr[fi].p;}
+      fi++;
+    }
+    lastHi[i]=lh;prevHi[i]=ph;lastLo[i]=ll;prevLo[i]=pl;
+  }
+  // FVG cercano (zonas de las últimas 30 velas)
+  const nearBF=new Array(n).fill(false), nearBR=new Array(n).fill(false);
+  const zones=[];
+  for(let i=2;i<n;i++){
+    if(bars[i-2].h<bars[i].l) zones.push({t:'b',top:bars[i].l,bot:bars[i-2].h,i});
+    if(bars[i-2].l>bars[i].h) zones.push({t:'s',top:bars[i-2].l,bot:bars[i].h,i});
+    while(zones.length&&zones[0].i<i-30)zones.shift();
+    const px=bars[i].c,a=atr[i];
+    for(const z of zones){
+      if(z.t==='b'&&px>=z.bot&&px<=z.top+3*a)nearBF[i]=true;
+      if(z.t==='s'&&px<=z.top&&px>=z.bot-3*a)nearBR[i]=true;
+    }
+  }
+  return {bars,e20,e50,rsi,atr,lastHi,prevHi,lastLo,prevLo,nearBF,nearBR};
+}
+/* mismo scoring del Command Center */
+function scoreAt(S,i){
+  const px=S.bars[i].c; let bull=50,bear=50;
+  if(px>S.e20[i]&&S.e20[i]>S.e50[i]){bull+=15;bear-=10;}
+  else if(px<S.e20[i]&&S.e20[i]<S.e50[i]){bear+=15;bull-=10;}
+  const r=S.rsi[i];
+  if(r>55&&r<75)bull+=8; else if(r<45&&r>25)bear+=8;
+  else if(r>=75)bull-=5; else if(r<=25)bear-=5;
+  if(!isNaN(S.lastHi[i])&&px>S.lastHi[i]){bull+=15;}
+  if(!isNaN(S.lastLo[i])&&px<S.lastLo[i]){bear+=15;}
+  if(!isNaN(S.lastHi[i])&&!isNaN(S.prevHi[i])&&!isNaN(S.lastLo[i])&&!isNaN(S.prevLo[i])){
+    if(S.lastHi[i]>S.prevHi[i]&&S.lastLo[i]>S.prevLo[i])bull+=7;
+    if(S.lastHi[i]<S.prevHi[i]&&S.lastLo[i]<S.prevLo[i])bear+=7;
+  }
+  if(S.nearBF[i])bull+=5; if(S.nearBR[i])bear+=5;
+  const b=S.bars[i];
+  if(!isNaN(S.prevHi[i])&&b.h>S.prevHi[i]&&b.c<S.prevHi[i])bear+=6;
+  if(!isNaN(S.prevLo[i])&&b.l<S.prevLo[i]&&b.c>S.prevLo[i])bull+=6;
+  bull=Math.max(0,Math.min(100,bull)); bear=Math.max(0,Math.min(100,bear));
+  return {bull,bear,trend: bull-bear>=12?'B':bear-bull>=12?'S':'N'};
+}
+
+/* ---------- 3. Backtest ---------- */
+function runBacktest(){
+  const thr=+$('pThr').value, gapMin=+$('pGap').value, riskPct=+$('pRisk').value/100;
+  const acc=+$('pAcc').value, useBE=$('pBe').value==='1', spread=(+$('pSpread').value||0)*0.0001;
+  const W={m15:.30,h1:.30,h4:.25,d1:.15}; // M1/M5 no existen en backtest M15: pesos renormalizados
+
+  const m15=prep(M15);
+  const H1=resample(M15,36e5), H4=resample(M15,144e5), D1=resample(M15,864e5);
+  const h1=prep(H1.bars), h4=prep(H4.bars), d1=prep(D1.bars);
+
+  const trades=[]; let open=null;
+  const n=M15.length;
+  for(let i=200;i<n;i++){
+    /* gestión de trade abierto */
+    if(open){
+      const b=M15[i], buy=open.side==='B'; let done=false;
+      const hitSL= buy? b.l<=open.sl : b.h>=open.sl;
+      const hit=tp=> buy? b.h>=tp : b.l<=tp;
+      if(hitSL){ // conservador: SL primero
+        open.r+= open.rem*((open.sl-open.entry)/(open.risk))*(buy?1:-1);
+        done=true;
+      }else{
+        if(open.stage===0&&hit(open.tp1)){ open.r+=0.5*1; open.rem-=0.5; open.stage=1; if(useBE)open.sl=open.entry; }
+        if(open.stage===1&&hit(open.tp2)){ open.r+=0.3*2; open.rem-=0.3; open.stage=2; }
+        if(open.stage===2&&hit(open.tp3)){ open.r+=0.2*3; open.rem=0; done=true; }
+        if(!done&&i-open.i>=96){ // 24h: cierre a mercado
+          open.r+= open.rem*((b.c-open.entry)/open.risk)*(buy?1:-1); done=true;
+        }
+      }
+      if(done){
+        open.r-= spread/open.risk;     // costo de spread en R
+        open.exitT=b.t; trades.push(open); open=null;
+      }
+      continue; // un trade a la vez; no se busca señal con posición abierta
+    }
+    /* señal */
+    const i1=H1.map[i]-1, i4=H4.map[i]-1, id=D1.map[i]-1; // último bar CERRADO
+    if(i1<60||i4<60||id<60) continue;
+    const sm=scoreAt(m15,i), s1=scoreAt(h1,i1), s4=scoreAt(h4,i4), sd=scoreAt(d1,id);
+    const bull=sm.bull*W.m15+s1.bull*W.h1+s4.bull*W.h4+sd.bull*W.d1;
+    const bear=sm.bear*W.m15+s1.bear*W.h1+s4.bear*W.h4+sd.bear*W.d1;
+    const side=bull>=bear?'B':'S', sc=Math.max(bull,bear), gap=Math.abs(bull-bear);
+    if(sc<thr||gap<gapMin) continue;
+    if(s1.trend!==side||s4.trend!==side) continue;
+    const px=M15[i].c, a=m15.atr[i];
+    let sl;
+    if(side==='B'){ const ref=isNaN(m15.lastLo[i])?px-2*a:m15.lastLo[i]; sl=Math.min(ref,px-1.2*a)-0.3*a; }
+    else{ const ref=isNaN(m15.lastHi[i])?px+2*a:m15.lastHi[i]; sl=Math.max(ref,px+1.2*a)+0.3*a; }
+    const risk=Math.abs(px-sl); if(risk<=0||risk<3*0.0001) continue;
+    open={i,t:M15[i].t,side,entry:px,sl,risk,
+      tp1:side==='B'?px+risk:px-risk, tp2:side==='B'?px+2*risk:px-2*risk, tp3:side==='B'?px+3*risk:px-3*risk,
+      r:0,rem:1,stage:0};
+  }
+  if(open){ open.r-=spread/open.risk; open.exitT=M15[n-1].t; trades.push(open); }
+
+  render(trades, acc, riskPct, M15[Math.floor(n*0.7)].t);
+}
+
+/* ---------- 4. Métricas y render ---------- */
+function stats(ts){
+  let w=0,gw=0,gl=0,sumR=0;
+  for(const t of ts){ sumR+=t.r; if(t.r>0){w++;gw+=t.r;} else gl-=t.r; }
+  return {n:ts.length, wr:ts.length?w/ts.length*100:0, pf:gl>0?gw/gl:(gw>0?Infinity:0), exp:ts.length?sumR/ts.length:0, sumR};
+}
+function fmtPF(x){return x===Infinity?'∞':x.toFixed(2);}
+function render(trades, acc, riskPct, splitT){
+  $('results').classList.remove('hidden');
+  const g=stats(trades);
+  // equity compuesta + drawdown + FTMO
+  let bal=acc, peak=acc, maxDD=0; const eq=[{t:trades[0]?.t||0,v:acc}];
+  let attempts=1, passes=0, fails=0, attStart=acc, dayKey='', dayStart=acc, passDays=[], attStartT=trades[0]?.exitT;
+  for(const t of trades){
+    const riskUsd=bal*riskPct; bal+=t.r*riskUsd; t.bal=bal;
+    eq.push({t:t.exitT,v:bal});
+    peak=Math.max(peak,bal); maxDD=Math.max(maxDD,(peak-bal)/peak);
+    // sim FTMO sobre el equity (5% diario / 10% total / objetivo 10%, todo vs balance inicial del intento)
+    const dk=new Date(t.exitT).toDateString();
+    if(dk!==dayKey){ dayKey=dk; dayStart=bal-t.r*riskUsd; }
+    const dailyLoss=dayStart-bal, totalLoss=attStart-bal;
+    if(dailyLoss>=attStart*.05||totalLoss>=attStart*.10){ fails++; attempts++; attStart=bal; attStartT=t.exitT; dayStart=bal; }
+    else if(bal-attStart>=attStart*.10){ passes++; passDays.push(Math.round((t.exitT-attStartT)/864e5)); attempts++; attStart=bal; attStartT=t.exitT; dayStart=bal; }
+  }
+  const span=trades.length?Math.round((trades.at(-1).exitT-trades[0].t)/864e5):0;
+  $('resMeta').textContent=`${span} días · ${(trades.length/Math.max(1,span/30)).toFixed(1)} trades/mes`;
+  $('rN').textContent=g.n;
+  $('rWr').textContent=g.wr.toFixed(1)+'%';
+  $('rPf').innerHTML=`<span class="${g.pf>=1?'t-bull':'t-bear'}">${fmtPF(g.pf)}</span>`;
+  $('rExp').innerHTML=`<span class="${g.exp>=0?'t-bull':'t-bear'}">${g.exp>=0?'+':''}${g.exp.toFixed(2)}R</span>`;
+  const ret=(bal/acc-1)*100;
+  $('rRet').innerHTML=`<span class="${ret>=0?'t-bull':'t-bear'}">${ret>=0?'+':''}${ret.toFixed(1)}%</span>`;
+  $('rDd').innerHTML=`<span class="${maxDD>0.08?'t-bear':maxDD>0.05?'t-warn':''}">-${(maxDD*100).toFixed(1)}%</span>`;
+
+  // curva
+  const cv=$('eqCanvas'),cx=cv.getContext('2d');
+  cx.clearRect(0,0,cv.width,cv.height);
+  if(eq.length>2){
+    const vmin=Math.min(...eq.map(p=>p.v)), vmax=Math.max(...eq.map(p=>p.v));
+    const t0=eq[0].t,t1=eq.at(-1).t;
+    const X=t=>10+(t-t0)/(t1-t0||1)*(cv.width-20), Y=v=>cv.height-12-((v-vmin)/((vmax-vmin)||1))*(cv.height-24);
+    cx.strokeStyle='#1E2735'; cx.beginPath(); cx.moveTo(10,Y(acc)); cx.lineTo(cv.width-10,Y(acc)); cx.stroke();
+    cx.strokeStyle='#FFB000'; cx.setLineDash([4,4]); cx.beginPath(); cx.moveTo(X(splitT),8); cx.lineTo(X(splitT),cv.height-8); cx.stroke(); cx.setLineDash([]);
+    cx.strokeStyle=bal>=acc?'#2BD576':'#FF4D5E'; cx.lineWidth=2; cx.beginPath();
+    eq.forEach((p,j)=>j?cx.lineTo(X(p.t),Y(p.v)):cx.moveTo(X(p.t),Y(p.v))); cx.stroke();
+    cx.fillStyle='#8A94A6'; cx.font='10px monospace'; cx.fillText('← in-sample | out-of-sample →',X(splitT)-90,16);
+  }
+
+  // OOS
+  const ins=trades.filter(t=>t.t<splitT), oos=trades.filter(t=>t.t>=splitT);
+  const a=stats(ins), b=stats(oos);
+  $('oosTable').innerHTML=`<tr><th>Tramo</th><th>Trades</th><th>WR</th><th>PF</th><th>Exp (R)</th></tr>
+  <tr><td>Dentro (70%)</td><td>${a.n}</td><td>${a.wr.toFixed(1)}%</td><td class="${a.pf>=1?'t-bull':'t-bear'}">${fmtPF(a.pf)}</td><td>${a.exp.toFixed(2)}</td></tr>
+  <tr><td><b>Fuera (30%)</b></td><td>${b.n}</td><td>${b.wr.toFixed(1)}%</td><td class="${b.pf>=1?'t-bull':'t-bear'}"><b>${fmtPF(b.pf)}</b></td><td><b>${b.exp.toFixed(2)}</b></td></tr>`;
+
+  // FTMO sim
+  $('ftmoSim').innerHTML=`<div class="kgrid">
+    <div class="kpi"><div class="l">Intentos simulados</div><div class="v">${passes+fails||(trades.length?1:0)}</div></div>
+    <div class="kpi"><div class="l">Aprobados (+10%)</div><div class="v t-bull">${passes}</div></div>
+    <div class="kpi"><div class="l">Quemados (límites)</div><div class="v t-bear">${fails}</div></div>
+  </div>
+  <p class="note">${passes?`Días promedio para aprobar: <b>${Math.round(passDays.reduce((x,y)=>x+y,0)/passDays.length)}</b>. `:''}Simulación secuencial con riesgo ${(riskPct*100).toFixed(1)}% por trade sobre cuenta de $${acc.toLocaleString()}: cada vez que se aprueba o se quema, arranca un intento nuevo. No incluye el filtro de noticias (en vivo te habría protegido en eventos macro) ni slippage extremo.</p>`;
+
+  // sesiones
+  const sess=[['Asia (00–07 UTC)',0,7],['Londres (07–12)',7,12],['LDN+NY (12–16)',12,16],['NY (16–21)',16,21],['Tarde NY (21–24)',21,24]];
+  $('sessTable').innerHTML='<tr><th>Sesión</th><th>Trades</th><th>WR</th><th>Exp (R)</th></tr>'+sess.map(([nm,h0,h1])=>{
+    const ts=trades.filter(t=>{const h=new Date(t.t).getUTCHours();return h>=h0&&h<h1;});
+    const s=stats(ts);
+    return `<tr><td>${nm}</td><td>${s.n}</td><td>${s.n?s.wr.toFixed(0)+'%':'—'}</td><td class="${s.exp>=0?'t-bull':'t-bear'}">${s.n?s.exp.toFixed(2):'—'}</td></tr>`;
+  }).join('');
+
+  // veredicto honesto
+  const v=$('verdict'); let cls,txt;
+  if(g.n<30){ cls='mixed'; txt=`<b class="title">MUESTRA INSUFICIENTE</b>Solo ${g.n} trades: cualquier conclusión sería ruido. Amplía el periodo o relaja el umbral para obtener al menos 50–100 trades antes de juzgar.`; }
+  else if(b.n>=15&&b.pf>=1.2&&b.exp>0){ cls='good'; txt=`<b class="title">EDGE PLAUSIBLE — VALIDAR EN DEMO</b>Fuera de muestra el sistema mantiene PF ${fmtPF(b.pf)} y expectancy +${b.exp.toFixed(2)}R en ${b.n} trades. No es garantía: el siguiente paso correcto es 4–8 semanas en demo/paper con el semáforo activo antes de pagar un challenge.`; }
+  else if(a.pf>=1.1&&b.pf<1){ cls='bad'; txt=`<b class="title">SOBREAJUSTE DETECTADO</b>Gana dentro de muestra (PF ${fmtPF(a.pf)}) pero pierde fuera (PF ${fmtPF(b.pf)}). Las reglas se ajustaron al pasado, no al mercado. No operes esto en real: hay que simplificar reglas, no añadir más.`; }
+  else if(g.pf<1){ cls='bad'; txt=`<b class="title">SIN VENTAJA ESTADÍSTICA</b>PF ${fmtPF(g.pf)} y expectancy ${g.exp.toFixed(2)}R: tal como está, esta estrategia pierde dinero después de costos. Mejor saberlo aquí que con $${acc.toLocaleString()} de FTMO. Prueba: exigir score más alto, operar solo Londres/NY, o solo a favor de D1.`; }
+  else{ cls='mixed'; txt=`<b class="title">MARGINAL</b>PF ${fmtPF(g.pf)}, expectancy ${g.exp.toFixed(2)}R: sobrevive pero sin ventaja clara. Con spread real, slippage y noticias, probablemente quede en breakeven. Itera parámetros y compara siempre la columna fuera de muestra.`; }
+  v.className='verdict '+cls; v.innerHTML=txt+`<br><span class="t-dim" style="font-size:11px">Limitaciones: sin M1/M5 (pesos renormalizados), sin filtro de noticias histórico, SL asumido primero en velas ambiguas, sin swap nocturno. Resultados pasados no garantizan resultados futuros.</span>`;
+  window.scrollTo({top:$('results').offsetTop-10,behavior:'smooth'});
+}
+
+$('btnLoad').onclick=loadData;
+$('btnRun').onclick=()=>{ $('btnRun').textContent='Calculando…'; setTimeout(()=>{ runBacktest(); $('btnRun').textContent='Ejecutar backtest'; },50); };
+</script>
+</body>
+</html>
