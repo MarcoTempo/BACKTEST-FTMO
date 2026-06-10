@@ -58,8 +58,8 @@ tr.winner td{background:rgba(43,213,118,.06)}
 </head>
 <body>
 
-<h1>FTMO BACKTEST LAB <span style="color:var(--txt)">V3</span></h1>
-<div class="sub">EUR/USD · CUATRO HIPÓTESIS PRE-REGISTRADAS · MISMA VARA</div>
+<h1>FTMO BACKTEST LAB <span style="color:var(--txt)">V4</span></h1>
+<div class="sub">EUR/USD · CINCO HIPÓTESIS PRE-REGISTRADAS · MISMA VARA</div>
 
 <div class="panel">
   <div class="ph"><h2>1 · Datos históricos</h2><span class="s" id="dataMeta">sin datos</span></div>
@@ -85,6 +85,7 @@ tr.winner td{background:rgba(43,213,118,.06)}
   <label>Estrategia</label>
   <select id="strat">
     <option value="d1trend" selected>D · Tendencia D1 (Donchian 20/10, sistema publicado)</option>
+    <option value="viper">E · Liquidity grab + BOS + retorno al 50% (case study)</option>
     <option value="rango">A · Ruptura del rango asiático (Londres)</option>
     <option value="pullback">B · Tendencia D1 + retroceso a EMA H1</option>
     <option value="score">C · Score multitimeframe (la original)</option>
@@ -165,6 +166,7 @@ let M15=null, CTX=null, D1L=null;
 
 const DESC={
   d1trend:'Sistema publicado (canal de Donchian / Turtle System 1), reglas fijas: COMPRA cuando el cierre diario supera el máximo de los últimos 20 días; VENTA cuando rompe el mínimo de 20 días. Stop inicial a 2×ATR(20). Salida cuando el cierre cruza el extremo opuesto de 10 días (trailing). Una posición a la vez, se deja correr días o semanas. Usa ~20 años de velas D1. Es el tipo de estrategia donde la literatura académica sí ha documentado ventaja neta de costos en forex.',
+  viper:'Hipótesis externa (case study Viper), reglas fijadas antes de ver resultados: 1) liquidity grab — una vela M15 barre con la mecha el último swing low y cierra de regreso arriba; 2) BOS alcista — cierre sobre el último swing high dentro de las 16 velas siguientes; 3) retorno al descuento — retroceso al 50% de la pierna (grab→BOS) dentro de 16 velas: ahí está la entrada, con SL bajo el mínimo del grab. Simétrico para cortos. Gestión idéntica a las demás. Nota: el PDF presume SL de 1 pip; aquí se usa SL estructural realista porque con spread un stop de 1 pip es ruido garantizado.',
   rango:'Reglas fijas: se mide el máximo y mínimo de la sesión asiática (00:00–07:00 UTC). Entre 07:00 y 11:00 UTC, si una vela M15 cierra fuera del rango, se entra en esa dirección. SL al lado opuesto del rango (rango válido: 8–45 pips). Máximo 1 trade al día.',
   pullback:'Reglas fijas: el sesgo lo da el D1 cerrado (EMA20 vs EMA50). Solo se opera a favor de ese sesgo cuando el precio retrocede a la EMA20 de H1 y la vela M15 cierra de regreso en la dirección de la tendencia. SL bajo/sobre el último swing M15. Pausa de 8 velas entre entradas.',
   score:'La original del Command Center: score ponderado M15/H1/H4/D1 con EMA, RSI, BOS, estructura, FVG y sweeps. Entra cuando score y gap superan el umbral con H1+H4 alineados. Ya sabemos cómo le fue — queda como línea base.'
@@ -392,7 +394,43 @@ function stratScore(c,i,st){
   else{ const ref=isNaN(c.m15.lastHi[i])?px+2*a:c.m15.lastHi[i]; sl=Math.max(ref,px+1.2*a)+0.3*a; }
   return {side,entry:px,sl};
 }
+/* E · Liquidity grab + BOS + retorno al 50% (case study externo) */
+function stratViper(c,i,st){
+  const b=M15[i], m=c.m15, a=m.atr[i];
+  if(st.ph===undefined){ st.ph=0; }
+  if(st.ph===0){
+    const lo=m.lastLo[i], hi=m.lastHi[i];
+    if(!isNaN(lo) && b.l<lo && b.c>lo){ st.ph=1; st.dir='B'; st.ext=b.l; st.ref=hi; st.t0=i; return null; }
+    if(!isNaN(hi) && b.h>hi && b.c<hi){ st.ph=1; st.dir='S'; st.ext=b.h; st.ref=lo; st.t0=i; return null; }
+    return null;
+  }
+  if(st.ph===1){
+    if(i-st.t0>16 || isNaN(st.ref)){ st.ph=0; return null; }
+    if(st.dir==='B'){
+      if(b.c<st.ext){ st.ph=0; return null; }                 // invalida: cierra bajo el grab
+      if(b.c>st.ref){ st.ph=2; st.leg0=st.ext; st.leg1=b.h; st.t1=i; }
+    }else{
+      if(b.c>st.ext){ st.ph=0; return null; }
+      if(b.c<st.ref){ st.ph=2; st.leg0=st.ext; st.leg1=b.l; st.t1=i; }
+    }
+    return null;
+  }
+  if(st.ph===2){
+    if(i-st.t1>16){ st.ph=0; return null; }
+    const mid=(st.leg0+st.leg1)/2;
+    if(st.dir==='B'){
+      if(b.l<st.leg0){ st.ph=0; return null; }                // se fue bajo el grab: setup muerto
+      if(b.l<=mid){ st.ph=0; return {side:'B',entry:mid,sl:st.leg0-0.2*a}; }
+    }else{
+      if(b.h>st.leg0){ st.ph=0; return null; }
+      if(b.h>=mid){ st.ph=0; return {side:'S',entry:mid,sl:st.leg0+0.2*a}; }
+    }
+    return null;
+  }
+  return null;
+}
 const STRATS={d1trend:{name:'D · Donchian D1 20/10'},
+              viper:{fn:stratViper,name:'E · Grab+BOS+50%'},
               rango:{fn:stratRango,name:'A · Rango asiático'},
               pullback:{fn:stratPullback,name:'B · D1 + retroceso'},
               score:{fn:stratScore,name:'C · Score MTF'}};
@@ -564,7 +602,7 @@ function runCompare(){
     rows.push({id:'d1trend',R,pass: R.b.n>=30 && R.b.pf>=1.2 && R.b.exp>0});
   }
   if(M15){
-    for(const id of ['rango','pullback','score']){
+    for(const id of ['viper','rango','pullback','score']){
       const R=report(simulate(id), acc, riskPct);
       rows.push({id,R,pass: R.b.n>=30 && R.b.pf>=1.2 && R.b.exp>0});
     }
