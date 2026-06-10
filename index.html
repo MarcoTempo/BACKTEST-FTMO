@@ -218,7 +218,10 @@ async function loadD1(){
     const r=await fetch(`https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=1day&outputsize=5000&timezone=UTC&apikey=${encodeURIComponent(key)}`);
     const j=await r.json();
     if(j.status==='error') throw new Error(j.message);
-    D1L=(j.values||[]).map(v=>({t:Date.parse(v.datetime.replace(' ','T')+'Z'), o:+v.open,h:+v.high,l:+v.low,c:+v.close})).sort((a,b)=>a.t-b.t);
+    D1L=(j.values||[]).map(v=>{
+      const dt=v.datetime.includes(' ')? v.datetime.replace(' ','T')+'Z' : v.datetime+'T00:00:00Z';
+      return {t:Date.parse(dt), o:+v.open,h:+v.high,l:+v.low,c:+v.close};
+    }).filter(b=>!isNaN(b.t)).sort((a,b)=>a.t-b.t);
     if(D1L.length<1000) throw new Error('Datos D1 insuficientes ('+D1L.length+').');
     $('status').textContent=`D1 listo: ${D1L.length.toLocaleString()} días desde ${new Date(D1L[0].t).getFullYear()}. Ya puedes correr la estrategia D.`;
     $('btnRun').disabled=false; $('btnCompare').disabled=false;
