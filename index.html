@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>FTMO Backtest Lab — EUR/USD</title>
+<title>FTMO Backtest Lab V2 — EUR/USD</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -23,7 +23,7 @@ label{display:block;color:var(--dim);font-size:11px;letter-spacing:.06em;text-tr
 h1{font-family:var(--disp);font-weight:700;font-size:20px;letter-spacing:.10em;color:var(--amber)}
 .sub{font-family:var(--disp);font-size:14px;letter-spacing:.12em;color:var(--dim)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:14px 0}
-.ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;gap:8px}
 .ph h2{font-family:var(--disp);font-size:15px;font-weight:600;letter-spacing:.14em;color:var(--amber);text-transform:uppercase}
 .ph .s{font-size:10px;color:var(--dim)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -41,24 +41,25 @@ h1{font-family:var(--disp);font-weight:700;font-size:20px;letter-spacing:.10em;c
 .status{font-size:11px;color:var(--dim);margin-top:6px;min-height:16px}
 canvas{width:100%;height:200px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
 table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
-th{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:right;padding:5px 6px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:right;padding:5px 4px;border-bottom:1px solid var(--line)}
 th:first-child,td:first-child{text-align:left}
-td{padding:6px;text-align:right;border-bottom:1px solid var(--line)}
+td{padding:6px 4px;text-align:right;border-bottom:1px solid var(--line)}
 tr:last-child td{border-bottom:0}
+tr.winner td{background:rgba(43,213,118,.06)}
 .note{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.55}
 .verdict{border-radius:8px;padding:12px;font-size:12.5px;margin-top:10px;border:1px solid var(--line);line-height:1.6}
 .verdict.good{border-color:rgba(43,213,118,.45)}
 .verdict.bad{border-color:rgba(255,77,94,.5)}
 .verdict.mixed{border-color:rgba(255,200,61,.5)}
 .verdict b.title{font-family:var(--disp);letter-spacing:.1em;font-size:15px;display:block;margin-bottom:4px}
-hr.sep{border:0;border-top:1px dashed var(--line);margin:12px 0}
+.stratdesc{font-size:11px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-top:10px;line-height:1.55}
 .hidden{display:none}
 </style>
 </head>
 <body>
 
-<h1>FTMO BACKTEST LAB</h1>
-<div class="sub">EUR/USD · VALIDACIÓN DE LA ESTRATEGIA DEL COMMAND CENTER</div>
+<h1>FTMO BACKTEST LAB <span style="color:var(--txt)">V2</span></h1>
+<div class="sub">EUR/USD · TRES ESTRATEGIAS · MISMA VARA DE MEDIR</div>
 
 <div class="panel">
   <div class="ph"><h2>1 · Datos históricos</h2><span class="s" id="dataMeta">sin datos</span></div>
@@ -66,38 +67,53 @@ hr.sep{border:0;border-top:1px dashed var(--line);margin:12px 0}
     <div><label>API key TwelveData</label><input id="apiKey" type="password" placeholder="tu clave"></div>
     <div><label>Periodo</label>
       <select id="period">
-        <option value="6">6 meses (~3 llamadas)</option>
-        <option value="12" selected>1 año (~6 llamadas)</option>
+        <option value="12">1 año (~6 llamadas)</option>
         <option value="24">2 años (~11 llamadas)</option>
-        <option value="36">3 años (~16 llamadas)</option>
+        <option value="36" selected>3 años (~16 llamadas)</option>
       </select></div>
   </div>
   <div style="margin-top:12px"><button class="btn" id="btnLoad">Descargar velas M15</button></div>
   <div class="prog"><i id="pbar"></i></div>
-  <div class="status" id="status">Las velas se descargan una vez y quedan en memoria: después puedes re-testear con otros parámetros sin gastar API.</div>
+  <div class="status" id="status">Se descargan una vez y quedan en memoria: todas las corridas posteriores son gratis.</div>
 </div>
 
 <div class="panel">
-  <div class="ph"><h2>2 · Parámetros</h2><span class="s">los mismos del motor de señales</span></div>
+  <div class="ph"><h2>2 · Estrategia y parámetros</h2></div>
+  <label>Estrategia</label>
+  <select id="strat">
+    <option value="rango">A · Ruptura del rango asiático (Londres)</option>
+    <option value="pullback">B · Tendencia D1 + retroceso a EMA H1</option>
+    <option value="score">C · Score multitimeframe (la original)</option>
+  </select>
+  <div class="stratdesc" id="stratDesc"></div>
   <div class="grid3">
-    <div><label>Score mínimo</label><input id="pThr" type="number" value="72" min="50" max="95"></div>
-    <div><label>Gap mínimo</label><input id="pGap" type="number" value="25" min="5" max="60"></div>
     <div><label>Riesgo/trade %</label><input id="pRisk" type="number" value="0.5" step="0.1" min="0.1" max="2"></div>
-  </div>
-  <div class="grid3">
     <div><label>Cuenta FTMO</label>
       <select id="pAcc"><option value="10000">10k</option><option value="25000">25k</option><option value="50000">50k</option><option value="100000" selected>100k</option><option value="200000">200k</option></select></div>
-    <div><label>SL→BE tras TP1</label><select id="pBe"><option value="1" selected>Sí</option><option value="0">No</option></select></div>
     <div><label>Spread (pips)</label><input id="pSpread" type="number" value="0.3" step="0.1" min="0"></div>
   </div>
-  <div style="margin-top:12px"><button class="btn ghost" id="btnRun" disabled>Ejecutar backtest</button></div>
-  <p class="note">Gestión simulada: 50% del lote sale en TP1 (1R), 30% en TP2 (2R), 20% en TP3 (3R). Si vela toca SL y TP a la vez, se asume SL primero (criterio conservador). El filtro de noticias NO se puede backtestear (no hay calendario histórico gratuito), así que los resultados reales con semáforo deberían ser iguales o mejores en eventos macro.</p>
+  <div class="grid3">
+    <div><label>SL→BE tras TP1</label><select id="pBe"><option value="1" selected>Sí</option><option value="0">No</option></select></div>
+    <div><label>Score mín (solo C)</label><input id="pThr" type="number" value="72" min="50" max="95"></div>
+    <div><label>Gap mín (solo C)</label><input id="pGap" type="number" value="25" min="5" max="60"></div>
+  </div>
+  <div class="grid2" style="margin-top:12px">
+    <button class="btn" id="btnRun" disabled>Ejecutar backtest</button>
+    <button class="btn ghost" id="btnCompare" disabled>Comparar las 3</button>
+  </div>
+  <p class="note">Gestión idéntica en las tres para comparar justo: 50% del lote en TP1 (1R), 30% en TP2 (2R), 20% en TP3 (3R), SL primero en velas ambiguas, cierre forzado a 24h. Las reglas A y B están fijadas de antemano (sin perillas) precisamente para no sobreajustarlas.</p>
+</div>
+
+<div id="cmpPanel" class="panel hidden">
+  <div class="ph"><h2>Comparativa</h2><span class="s">decidir solo por la columna PF fuera</span></div>
+  <table id="cmpTable"></table>
+  <p class="note">Una estrategia "pasa" este filtro si: PF fuera ≥ 1.2, expectancy fuera > 0 y ≥ 30 trades fuera. Si ninguna pasa, ninguna se opera — ese también es un resultado.</p>
 </div>
 
 <div id="results" class="hidden">
 
 <div class="panel">
-  <div class="ph"><h2>3 · Resultados globales</h2><span class="s" id="resMeta">—</span></div>
+  <div class="ph"><h2>3 · Resultados — <span id="resStrat" style="color:var(--txt)"></span></h2><span class="s" id="resMeta">—</span></div>
   <div class="kgrid">
     <div class="kpi"><div class="l">Trades</div><div class="v" id="rN">—</div></div>
     <div class="kpi"><div class="l">Win rate</div><div class="v" id="rWr">—</div></div>
@@ -113,7 +129,6 @@ hr.sep{border:0;border-top:1px dashed var(--line);margin:12px 0}
 <div class="panel">
   <div class="ph"><h2>4 · Dentro vs fuera de muestra</h2><span class="s">70% / 30% cronológico</span></div>
   <table id="oosTable"></table>
-  <p class="note">La mitad <b>fuera de muestra</b> (el 30% más reciente, que no se usó para diseñar nada) es la única cifra que se acerca a lo que verías en vivo. Si dentro de muestra gana y fuera pierde, la estrategia está sobreajustada.</p>
 </div>
 
 <div class="panel">
@@ -135,21 +150,31 @@ hr.sep{border:0;border-top:1px dashed var(--line);margin:12px 0}
 
 <script>
 /* ============================================================
-   FTMO BACKTEST LAB — valida las reglas del Command Center
-   Base: velas M15 reales · H1/H4/D1 resampleadas (sin lookahead)
+   FTMO BACKTEST LAB V2 — tres estrategias, misma vara de medir
+   A) Ruptura del rango asiático en Londres (reglas fijas)
+   B) Tendencia D1 + retroceso a EMA20 H1 (reglas fijas)
+   C) Score multitimeframe (la original, parametrizable)
    ============================================================ */
 const $=id=>document.getElementById(id);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let M15=null; // velas crudas [{t,o,h,l,c}] cronológicas
+let M15=null, CTX=null;
 
-/* ---------- 1. Descarga paginada ---------- */
+const DESC={
+  rango:'Reglas fijas: se mide el máximo y mínimo de la sesión asiática (00:00–07:00 UTC). Entre 07:00 y 11:00 UTC, si una vela M15 cierra fuera del rango, se entra en esa dirección. SL al lado opuesto del rango (rango válido: 8–45 pips). Máximo 1 trade al día.',
+  pullback:'Reglas fijas: el sesgo lo da el D1 cerrado (EMA20 vs EMA50). Solo se opera a favor de ese sesgo cuando el precio retrocede a la EMA20 de H1 y la vela M15 cierra de regreso en la dirección de la tendencia. SL bajo/sobre el último swing M15. Pausa de 8 velas entre entradas.',
+  score:'La original del Command Center: score ponderado M15/H1/H4/D1 con EMA, RSI, BOS, estructura, FVG y sweeps. Entra cuando score y gap superan el umbral con H1+H4 alineados. Ya sabemos cómo le fue — queda como línea base.'
+};
+$('stratDesc').textContent=DESC[$('strat').value];
+$('strat').onchange=()=>$('stratDesc').textContent=DESC[$('strat').value];
+
+/* ---------- Descarga paginada ---------- */
 async function loadData(){
   const key=$('apiKey').value.trim();
   if(!key){ $('status').textContent='Pega tu API key de TwelveData.'; return; }
   const months=+$('period').value;
   const startTs=Date.now()-months*30.44*864e5;
   const est=Math.ceil(months*0.6)+1;
-  $('btnLoad').disabled=true; $('btnRun').disabled=true;
+  $('btnLoad').disabled=true; $('btnRun').disabled=true; $('btnCompare').disabled=true;
   let cursor=new Date(), all=[], call=0;
   try{
     while(true){
@@ -161,7 +186,7 @@ async function loadData(){
       if(j.status==='error') throw new Error(j.message);
       const vals=j.values||[];
       for(const v of vals) all.push({t:Date.parse(v.datetime.replace(' ','T')+'Z'), o:+v.open,h:+v.high,l:+v.low,c:+v.close});
-      const oldest=all.length? Math.min(...vals.map(v=>Date.parse(v.datetime.replace(' ','T')+'Z'))) : 0;
+      const oldest=vals.length? Math.min(...vals.map(v=>Date.parse(v.datetime.replace(' ','T')+'Z'))) : 0;
       $('pbar').style.width=Math.min(100,(Date.now()-oldest)/(Date.now()-startTs)*100)+'%';
       if(!vals.length || vals.length<5000 || oldest<=startTs) break;
       cursor=new Date(oldest-60000);
@@ -171,30 +196,16 @@ async function loadData(){
     M15=all.filter(b=>{ if(b.t<startTs||seen.has(b.t))return false; seen.add(b.t); return true; })
            .sort((a,b)=>a.t-b.t);
     if(M15.length<2000) throw new Error('Datos insuficientes ('+M15.length+' velas).');
+    CTX=null;
     $('pbar').style.width='100%';
     $('dataMeta').textContent=M15.length.toLocaleString()+' velas';
-    $('status').textContent=`Listo: ${M15.length.toLocaleString()} velas M15 desde ${new Date(M15[0].t).toLocaleDateString()}. Ya puedes backtestear sin gastar API.`;
-    $('btnRun').disabled=false;
-  }catch(e){
-    $('status').textContent='Error: '+e.message;
-  }finally{ $('btnLoad').disabled=false; }
+    $('status').textContent=`Listo: ${M15.length.toLocaleString()} velas desde ${new Date(M15[0].t).toLocaleDateString()}. Corre una estrategia o compara las tres.`;
+    $('btnRun').disabled=false; $('btnCompare').disabled=false;
+  }catch(e){ $('status').textContent='Error: '+e.message; }
+  finally{ $('btnLoad').disabled=false; }
 }
 
-/* ---------- 2. Resampleo + indicadores precalculados ---------- */
-function resample(src, ms){
-  const out=[], map=new Array(src.length); // map[i] = índice del ÚLTIMO bar CERRADO de la serie alta
-  let cur=null;
-  for(let i=0;i<src.length;i++){
-    const b=src[i], bucket=Math.floor(b.t/ms)*ms;
-    if(!cur || cur.t!==bucket){
-      if(cur) out.push(cur);
-      cur={t:bucket,o:b.o,h:b.h,l:b.l,c:b.c};
-    }else{ cur.h=Math.max(cur.h,b.h); cur.l=Math.min(cur.l,b.l); cur.c=b.c; }
-    map[i]=out.length-1; // -1 si aún no hay bar cerrado
-  }
-  if(cur) out.push(cur);
-  return {bars:out,map};
-}
+/* ---------- Indicadores ---------- */
 function emaArr(cl,p){const k=2/(p+1);const o=new Array(cl.length);o[0]=cl[0];for(let i=1;i<cl.length;i++)o[i]=cl[i]*k+o[i-1]*(1-k);return o;}
 function rsiArr(cl,p=14){
   const o=new Array(cl.length).fill(50); let g=0,l=0;
@@ -213,13 +224,24 @@ function atrArr(b,p=14){
   }
   return o;
 }
+function resample(src, ms){
+  const out=[], map=new Array(src.length);
+  let cur=null;
+  for(let i=0;i<src.length;i++){
+    const b=src[i], bucket=Math.floor(b.t/ms)*ms;
+    if(!cur || cur.t!==bucket){ if(cur) out.push(cur); cur={t:bucket,o:b.o,h:b.h,l:b.l,c:b.c}; }
+    else{ cur.h=Math.max(cur.h,b.h); cur.l=Math.min(cur.l,b.l); cur.c=b.c; }
+    map[i]=out.length-1; // índice del último bar CERRADO
+  }
+  if(cur) out.push(cur);
+  return {bars:out,map};
+}
 function prep(bars){
   const n=bars.length, cl=bars.map(b=>b.c);
   const e20=emaArr(cl,20), e50=emaArr(cl,50), rsi=rsiArr(cl), atr=atrArr(bars);
-  // fractales k=2, confirmados con retraso de 2 velas (sin lookahead)
   const k=2, lastHi=new Array(n).fill(NaN), prevHi=new Array(n).fill(NaN),
         lastLo=new Array(n).fill(NaN), prevLo=new Array(n).fill(NaN);
-  const fr=[]; // {i,type,p}
+  const fr=[];
   for(let i=k;i<n-k;i++){
     let H=true,L=true;
     for(let j=1;j<=k;j++){
@@ -238,7 +260,6 @@ function prep(bars){
     }
     lastHi[i]=lh;prevHi[i]=ph;lastLo[i]=ll;prevLo[i]=pl;
   }
-  // FVG cercano (zonas de las últimas 30 velas)
   const nearBF=new Array(n).fill(false), nearBR=new Array(n).fill(false);
   const zones=[];
   for(let i=2;i<n;i++){
@@ -253,7 +274,63 @@ function prep(bars){
   }
   return {bars,e20,e50,rsi,atr,lastHi,prevHi,lastLo,prevLo,nearBF,nearBR};
 }
-/* mismo scoring del Command Center */
+
+/* ---------- Contexto compartido (se construye una vez) ---------- */
+function buildContext(){
+  if(CTX) return CTX;
+  const m15=prep(M15);
+  const H1=resample(M15,36e5), H4=resample(M15,144e5), D1=resample(M15,864e5);
+  const h1=prep(H1.bars), h4=prep(H4.bars), d1=prep(D1.bars);
+  const n=M15.length;
+  // hora UTC y día por vela
+  const hour=new Array(n), dayId=new Array(n);
+  for(let i=0;i<n;i++){ const d=new Date(M15[i].t); hour[i]=d.getUTCHours(); dayId[i]=Math.floor(M15[i].t/864e5); }
+  // rango asiático por día: hi/lo de 00:00–06:59, disponible desde las 07:00
+  const aHi=new Array(n).fill(NaN), aLo=new Array(n).fill(NaN);
+  let curDay=-1, hi=NaN, lo=NaN;
+  for(let i=0;i<n;i++){
+    if(dayId[i]!==curDay){ curDay=dayId[i]; hi=NaN; lo=NaN; }
+    if(hour[i]<7){ hi=isNaN(hi)?M15[i].h:Math.max(hi,M15[i].h); lo=isNaN(lo)?M15[i].l:Math.min(lo,M15[i].l); }
+    else { aHi[i]=hi; aLo[i]=lo; }
+  }
+  CTX={m15,H1,H4,D1,h1,h4,d1,hour,dayId,aHi,aLo,n};
+  return CTX;
+}
+
+/* ---------- Estrategias: (ctx,i,st) -> {side,entry,sl} | null ---------- */
+/* A · Ruptura del rango asiático */
+function stratRango(c,i,st){
+  const h=c.hour[i];
+  if(h<7||h>=11) return null;
+  if(st.lastDay===c.dayId[i]) return null;          // 1 trade/día
+  const hi=c.aHi[i], lo=c.aLo[i];
+  if(isNaN(hi)||isNaN(lo)) return null;
+  const range=hi-lo;
+  if(range<8e-4||range>45e-4) return null;          // rango sano: 8–45 pips
+  const b=M15[i];
+  if(b.c>hi){ st.lastDay=c.dayId[i]; return {side:'B',entry:b.c,sl:lo}; }
+  if(b.c<lo){ st.lastDay=c.dayId[i]; return {side:'S',entry:b.c,sl:hi}; }
+  return null;
+}
+/* B · Tendencia D1 + retroceso a EMA20 H1 */
+function stratPullback(c,i,st){
+  if(st.lastIdx!=null && i-st.lastIdx<8) return null; // pausa entre entradas
+  const id=c.D1.map[i]-1, i1=c.H1.map[i]-1;
+  if(id<55||i1<25) return null;
+  const d=c.d1, h1=c.h1, b=M15[i], a=c.m15.atr[i];
+  const ema=h1.e20[i1], r1=h1.rsi[i1];
+  const bullD1=d.e20[id]>d.e50[id], bearD1=d.e20[id]<d.e50[id];
+  if(bullD1 && b.l<=ema && b.c>ema && b.c>b.o && r1>35 && r1<70){
+    const ref=isNaN(c.m15.lastLo[i])?b.c-2*a:c.m15.lastLo[i];
+    st.lastIdx=i; return {side:'B',entry:b.c,sl:Math.min(ref,b.c-1.2*a)-0.3*a};
+  }
+  if(bearD1 && b.h>=ema && b.c<ema && b.c<b.o && r1<65 && r1>30){
+    const ref=isNaN(c.m15.lastHi[i])?b.c+2*a:c.m15.lastHi[i];
+    st.lastIdx=i; return {side:'S',entry:b.c,sl:Math.max(ref,b.c+1.2*a)+0.3*a};
+  }
+  return null;
+}
+/* C · Score multitimeframe (la original) */
 function scoreAt(S,i){
   const px=S.bars[i].c; let bull=50,bear=50;
   if(px>S.e20[i]&&S.e20[i]>S.e50[i]){bull+=15;bear-=10;}
@@ -261,8 +338,8 @@ function scoreAt(S,i){
   const r=S.rsi[i];
   if(r>55&&r<75)bull+=8; else if(r<45&&r>25)bear+=8;
   else if(r>=75)bull-=5; else if(r<=25)bear-=5;
-  if(!isNaN(S.lastHi[i])&&px>S.lastHi[i]){bull+=15;}
-  if(!isNaN(S.lastLo[i])&&px<S.lastLo[i]){bear+=15;}
+  if(!isNaN(S.lastHi[i])&&px>S.lastHi[i])bull+=15;
+  if(!isNaN(S.lastLo[i])&&px<S.lastLo[i])bear+=15;
   if(!isNaN(S.lastHi[i])&&!isNaN(S.prevHi[i])&&!isNaN(S.lastLo[i])&&!isNaN(S.prevLo[i])){
     if(S.lastHi[i]>S.prevHi[i]&&S.lastLo[i]>S.prevLo[i])bull+=7;
     if(S.lastHi[i]<S.prevHi[i]&&S.lastLo[i]<S.prevLo[i])bear+=7;
@@ -274,149 +351,169 @@ function scoreAt(S,i){
   bull=Math.max(0,Math.min(100,bull)); bear=Math.max(0,Math.min(100,bear));
   return {bull,bear,trend: bull-bear>=12?'B':bear-bull>=12?'S':'N'};
 }
+function stratScore(c,i,st){
+  const thr=+$('pThr').value, gapMin=+$('pGap').value;
+  const i1=c.H1.map[i]-1, i4=c.H4.map[i]-1, id=c.D1.map[i]-1;
+  if(i1<60||i4<60||id<60) return null;
+  const W={m15:.30,h1:.30,h4:.25,d1:.15};
+  const sm=scoreAt(c.m15,i), s1=scoreAt(c.h1,i1), s4=scoreAt(c.h4,i4), sd=scoreAt(c.d1,id);
+  const bull=sm.bull*W.m15+s1.bull*W.h1+s4.bull*W.h4+sd.bull*W.d1;
+  const bear=sm.bear*W.m15+s1.bear*W.h1+s4.bear*W.h4+sd.bear*W.d1;
+  const side=bull>=bear?'B':'S', sc=Math.max(bull,bear), gap=Math.abs(bull-bear);
+  if(sc<thr||gap<gapMin) return null;
+  if(s1.trend!==side||s4.trend!==side) return null;
+  const px=M15[i].c, a=c.m15.atr[i];
+  let sl;
+  if(side==='B'){ const ref=isNaN(c.m15.lastLo[i])?px-2*a:c.m15.lastLo[i]; sl=Math.min(ref,px-1.2*a)-0.3*a; }
+  else{ const ref=isNaN(c.m15.lastHi[i])?px+2*a:c.m15.lastHi[i]; sl=Math.max(ref,px+1.2*a)+0.3*a; }
+  return {side,entry:px,sl};
+}
+const STRATS={rango:{fn:stratRango,name:'A · Rango asiático'},
+              pullback:{fn:stratPullback,name:'B · D1 + retroceso'},
+              score:{fn:stratScore,name:'C · Score MTF'}};
 
-/* ---------- 3. Backtest ---------- */
-function runBacktest(){
-  const thr=+$('pThr').value, gapMin=+$('pGap').value, riskPct=+$('pRisk').value/100;
-  const acc=+$('pAcc').value, useBE=$('pBe').value==='1', spread=(+$('pSpread').value||0)*0.0001;
-  const W={m15:.30,h1:.30,h4:.25,d1:.15}; // M1/M5 no existen en backtest M15: pesos renormalizados
-
-  const m15=prep(M15);
-  const H1=resample(M15,36e5), H4=resample(M15,144e5), D1=resample(M15,864e5);
-  const h1=prep(H1.bars), h4=prep(H4.bars), d1=prep(D1.bars);
-
-  const trades=[]; let open=null;
-  const n=M15.length;
-  for(let i=200;i<n;i++){
-    /* gestión de trade abierto */
+/* ---------- Simulador (idéntico para las tres) ---------- */
+function simulate(stratId){
+  const c=buildContext();
+  const useBE=$('pBe').value==='1', spread=(+$('pSpread').value||0)*0.0001;
+  const fn=STRATS[stratId].fn;
+  const trades=[]; let open=null; const st={lastDay:null,lastIdx:null};
+  for(let i=200;i<c.n;i++){
     if(open){
       const b=M15[i], buy=open.side==='B'; let done=false;
       const hitSL= buy? b.l<=open.sl : b.h>=open.sl;
       const hit=tp=> buy? b.h>=tp : b.l<=tp;
-      if(hitSL){ // conservador: SL primero
-        open.r+= open.rem*((open.sl-open.entry)/(open.risk))*(buy?1:-1);
-        done=true;
-      }else{
-        if(open.stage===0&&hit(open.tp1)){ open.r+=0.5*1; open.rem-=0.5; open.stage=1; if(useBE)open.sl=open.entry; }
-        if(open.stage===1&&hit(open.tp2)){ open.r+=0.3*2; open.rem-=0.3; open.stage=2; }
-        if(open.stage===2&&hit(open.tp3)){ open.r+=0.2*3; open.rem=0; done=true; }
-        if(!done&&i-open.i>=96){ // 24h: cierre a mercado
-          open.r+= open.rem*((b.c-open.entry)/open.risk)*(buy?1:-1); done=true;
-        }
+      if(hitSL){ open.r+= open.rem*((open.sl-open.entry)/open.risk)*(buy?1:-1); done=true; }
+      else{
+        if(open.stage===0&&hit(open.tp1)){ open.r+=0.5; open.rem-=0.5; open.stage=1; if(useBE)open.sl=open.entry; }
+        if(open.stage===1&&hit(open.tp2)){ open.r+=0.6; open.rem-=0.3; open.stage=2; }
+        if(open.stage===2&&hit(open.tp3)){ open.r+=0.6; open.rem=0; done=true; }
+        if(!done&&i-open.i>=96){ open.r+= open.rem*((b.c-open.entry)/open.risk)*(buy?1:-1); done=true; }
       }
-      if(done){
-        open.r-= spread/open.risk;     // costo de spread en R
-        open.exitT=b.t; trades.push(open); open=null;
-      }
-      continue; // un trade a la vez; no se busca señal con posición abierta
+      if(done){ open.r-=spread/open.risk; open.exitT=b.t; trades.push(open); open=null; }
+      continue;
     }
-    /* señal */
-    const i1=H1.map[i]-1, i4=H4.map[i]-1, id=D1.map[i]-1; // último bar CERRADO
-    if(i1<60||i4<60||id<60) continue;
-    const sm=scoreAt(m15,i), s1=scoreAt(h1,i1), s4=scoreAt(h4,i4), sd=scoreAt(d1,id);
-    const bull=sm.bull*W.m15+s1.bull*W.h1+s4.bull*W.h4+sd.bull*W.d1;
-    const bear=sm.bear*W.m15+s1.bear*W.h1+s4.bear*W.h4+sd.bear*W.d1;
-    const side=bull>=bear?'B':'S', sc=Math.max(bull,bear), gap=Math.abs(bull-bear);
-    if(sc<thr||gap<gapMin) continue;
-    if(s1.trend!==side||s4.trend!==side) continue;
-    const px=M15[i].c, a=m15.atr[i];
-    let sl;
-    if(side==='B'){ const ref=isNaN(m15.lastLo[i])?px-2*a:m15.lastLo[i]; sl=Math.min(ref,px-1.2*a)-0.3*a; }
-    else{ const ref=isNaN(m15.lastHi[i])?px+2*a:m15.lastHi[i]; sl=Math.max(ref,px+1.2*a)+0.3*a; }
-    const risk=Math.abs(px-sl); if(risk<=0||risk<3*0.0001) continue;
-    open={i,t:M15[i].t,side,entry:px,sl,risk,
-      tp1:side==='B'?px+risk:px-risk, tp2:side==='B'?px+2*risk:px-2*risk, tp3:side==='B'?px+3*risk:px-3*risk,
+    const sig=fn(c,i,st);
+    if(!sig) continue;
+    const risk=Math.abs(sig.entry-sig.sl);
+    if(risk<3e-4) continue;
+    open={i,t:M15[i].t,side:sig.side,entry:sig.entry,sl:sig.sl,risk,
+      tp1:sig.side==='B'?sig.entry+risk:sig.entry-risk,
+      tp2:sig.side==='B'?sig.entry+2*risk:sig.entry-2*risk,
+      tp3:sig.side==='B'?sig.entry+3*risk:sig.entry-3*risk,
       r:0,rem:1,stage:0};
   }
-  if(open){ open.r-=spread/open.risk; open.exitT=M15[n-1].t; trades.push(open); }
-
-  render(trades, acc, riskPct, M15[Math.floor(n*0.7)].t);
+  if(open){ open.r-=spread/open.risk; open.exitT=M15[c.n-1].t; trades.push(open); }
+  return trades;
 }
 
-/* ---------- 4. Métricas y render ---------- */
+/* ---------- Métricas ---------- */
 function stats(ts){
   let w=0,gw=0,gl=0,sumR=0;
   for(const t of ts){ sumR+=t.r; if(t.r>0){w++;gw+=t.r;} else gl-=t.r; }
-  return {n:ts.length, wr:ts.length?w/ts.length*100:0, pf:gl>0?gw/gl:(gw>0?Infinity:0), exp:ts.length?sumR/ts.length:0, sumR};
+  return {n:ts.length, wr:ts.length?w/ts.length*100:0, pf:gl>0?gw/gl:(gw>0?Infinity:0), exp:ts.length?sumR/ts.length:0};
 }
-function fmtPF(x){return x===Infinity?'∞':x.toFixed(2);}
-function render(trades, acc, riskPct, splitT){
-  $('results').classList.remove('hidden');
-  const g=stats(trades);
-  // equity compuesta + drawdown + FTMO
+const fmtPF=x=>x===Infinity?'∞':x.toFixed(2);
+function report(trades, acc, riskPct){
+  const splitT = M15[Math.floor(M15.length*0.7)].t;
   let bal=acc, peak=acc, maxDD=0; const eq=[{t:trades[0]?.t||0,v:acc}];
-  let attempts=1, passes=0, fails=0, attStart=acc, dayKey='', dayStart=acc, passDays=[], attStartT=trades[0]?.exitT;
+  let passes=0, fails=0, attStart=acc, dayKey='', dayStart=acc, passDays=[], attStartT=trades[0]?.exitT;
   for(const t of trades){
-    const riskUsd=bal*riskPct; bal+=t.r*riskUsd; t.bal=bal;
+    const riskUsd=bal*riskPct; bal+=t.r*riskUsd;
     eq.push({t:t.exitT,v:bal});
     peak=Math.max(peak,bal); maxDD=Math.max(maxDD,(peak-bal)/peak);
-    // sim FTMO sobre el equity (5% diario / 10% total / objetivo 10%, todo vs balance inicial del intento)
     const dk=new Date(t.exitT).toDateString();
     if(dk!==dayKey){ dayKey=dk; dayStart=bal-t.r*riskUsd; }
     const dailyLoss=dayStart-bal, totalLoss=attStart-bal;
-    if(dailyLoss>=attStart*.05||totalLoss>=attStart*.10){ fails++; attempts++; attStart=bal; attStartT=t.exitT; dayStart=bal; }
-    else if(bal-attStart>=attStart*.10){ passes++; passDays.push(Math.round((t.exitT-attStartT)/864e5)); attempts++; attStart=bal; attStartT=t.exitT; dayStart=bal; }
+    if(dailyLoss>=attStart*.05||totalLoss>=attStart*.10){ fails++; attStart=bal; attStartT=t.exitT; dayStart=bal; }
+    else if(bal-attStart>=attStart*.10){ passes++; passDays.push(Math.round((t.exitT-attStartT)/864e5)); attStart=bal; attStartT=t.exitT; dayStart=bal; }
   }
-  const span=trades.length?Math.round((trades.at(-1).exitT-trades[0].t)/864e5):0;
-  $('resMeta').textContent=`${span} días · ${(trades.length/Math.max(1,span/30)).toFixed(1)} trades/mes`;
+  const ins=trades.filter(t=>t.t<splitT), oos=trades.filter(t=>t.t>=splitT);
+  return {trades,g:stats(trades),a:stats(ins),b:stats(oos),bal,maxDD,eq,splitT,passes,fails,passDays,acc,riskPct};
+}
+
+/* ---------- Render detalle ---------- */
+function renderDetail(stratId, R){
+  $('results').classList.remove('hidden');
+  $('resStrat').textContent=STRATS[stratId].name;
+  const g=R.g, span=R.trades.length?Math.round((R.trades.at(-1).exitT-R.trades[0].t)/864e5):0;
+  $('resMeta').textContent=`${span} días · ${(g.n/Math.max(1,span/30)).toFixed(1)} trades/mes`;
   $('rN').textContent=g.n;
   $('rWr').textContent=g.wr.toFixed(1)+'%';
   $('rPf').innerHTML=`<span class="${g.pf>=1?'t-bull':'t-bear'}">${fmtPF(g.pf)}</span>`;
   $('rExp').innerHTML=`<span class="${g.exp>=0?'t-bull':'t-bear'}">${g.exp>=0?'+':''}${g.exp.toFixed(2)}R</span>`;
-  const ret=(bal/acc-1)*100;
+  const ret=(R.bal/R.acc-1)*100;
   $('rRet').innerHTML=`<span class="${ret>=0?'t-bull':'t-bear'}">${ret>=0?'+':''}${ret.toFixed(1)}%</span>`;
-  $('rDd').innerHTML=`<span class="${maxDD>0.08?'t-bear':maxDD>0.05?'t-warn':''}">-${(maxDD*100).toFixed(1)}%</span>`;
-
-  // curva
+  $('rDd').innerHTML=`<span class="${R.maxDD>0.08?'t-bear':R.maxDD>0.05?'t-warn':''}">-${(R.maxDD*100).toFixed(1)}%</span>`;
   const cv=$('eqCanvas'),cx=cv.getContext('2d');
   cx.clearRect(0,0,cv.width,cv.height);
-  if(eq.length>2){
-    const vmin=Math.min(...eq.map(p=>p.v)), vmax=Math.max(...eq.map(p=>p.v));
-    const t0=eq[0].t,t1=eq.at(-1).t;
+  if(R.eq.length>2){
+    const vmin=Math.min(...R.eq.map(p=>p.v)), vmax=Math.max(...R.eq.map(p=>p.v));
+    const t0=R.eq[0].t,t1=R.eq.at(-1).t;
     const X=t=>10+(t-t0)/(t1-t0||1)*(cv.width-20), Y=v=>cv.height-12-((v-vmin)/((vmax-vmin)||1))*(cv.height-24);
-    cx.strokeStyle='#1E2735'; cx.beginPath(); cx.moveTo(10,Y(acc)); cx.lineTo(cv.width-10,Y(acc)); cx.stroke();
-    cx.strokeStyle='#FFB000'; cx.setLineDash([4,4]); cx.beginPath(); cx.moveTo(X(splitT),8); cx.lineTo(X(splitT),cv.height-8); cx.stroke(); cx.setLineDash([]);
-    cx.strokeStyle=bal>=acc?'#2BD576':'#FF4D5E'; cx.lineWidth=2; cx.beginPath();
-    eq.forEach((p,j)=>j?cx.lineTo(X(p.t),Y(p.v)):cx.moveTo(X(p.t),Y(p.v))); cx.stroke();
-    cx.fillStyle='#8A94A6'; cx.font='10px monospace'; cx.fillText('← in-sample | out-of-sample →',X(splitT)-90,16);
+    cx.strokeStyle='#1E2735'; cx.beginPath(); cx.moveTo(10,Y(R.acc)); cx.lineTo(cv.width-10,Y(R.acc)); cx.stroke();
+    cx.strokeStyle='#FFB000'; cx.setLineDash([4,4]); cx.beginPath(); cx.moveTo(X(R.splitT),8); cx.lineTo(X(R.splitT),cv.height-8); cx.stroke(); cx.setLineDash([]);
+    cx.strokeStyle=R.bal>=R.acc?'#2BD576':'#FF4D5E'; cx.lineWidth=2; cx.beginPath();
+    R.eq.forEach((p,j)=>j?cx.lineTo(X(p.t),Y(p.v)):cx.moveTo(X(p.t),Y(p.v))); cx.stroke();
+    cx.fillStyle='#8A94A6'; cx.font='10px monospace'; cx.fillText('← in-sample | out-of-sample →',X(R.splitT)-90,16);
   }
-
-  // OOS
-  const ins=trades.filter(t=>t.t<splitT), oos=trades.filter(t=>t.t>=splitT);
-  const a=stats(ins), b=stats(oos);
   $('oosTable').innerHTML=`<tr><th>Tramo</th><th>Trades</th><th>WR</th><th>PF</th><th>Exp (R)</th></tr>
-  <tr><td>Dentro (70%)</td><td>${a.n}</td><td>${a.wr.toFixed(1)}%</td><td class="${a.pf>=1?'t-bull':'t-bear'}">${fmtPF(a.pf)}</td><td>${a.exp.toFixed(2)}</td></tr>
-  <tr><td><b>Fuera (30%)</b></td><td>${b.n}</td><td>${b.wr.toFixed(1)}%</td><td class="${b.pf>=1?'t-bull':'t-bear'}"><b>${fmtPF(b.pf)}</b></td><td><b>${b.exp.toFixed(2)}</b></td></tr>`;
-
-  // FTMO sim
+  <tr><td>Dentro (70%)</td><td>${R.a.n}</td><td>${R.a.wr.toFixed(1)}%</td><td class="${R.a.pf>=1?'t-bull':'t-bear'}">${fmtPF(R.a.pf)}</td><td>${R.a.exp.toFixed(2)}</td></tr>
+  <tr><td><b>Fuera (30%)</b></td><td>${R.b.n}</td><td>${R.b.wr.toFixed(1)}%</td><td class="${R.b.pf>=1?'t-bull':'t-bear'}"><b>${fmtPF(R.b.pf)}</b></td><td><b>${R.b.exp.toFixed(2)}</b></td></tr>`;
   $('ftmoSim').innerHTML=`<div class="kgrid">
-    <div class="kpi"><div class="l">Intentos simulados</div><div class="v">${passes+fails||(trades.length?1:0)}</div></div>
-    <div class="kpi"><div class="l">Aprobados (+10%)</div><div class="v t-bull">${passes}</div></div>
-    <div class="kpi"><div class="l">Quemados (límites)</div><div class="v t-bear">${fails}</div></div>
+    <div class="kpi"><div class="l">Intentos</div><div class="v">${R.passes+R.fails||(g.n?1:0)}</div></div>
+    <div class="kpi"><div class="l">Aprobados (+10%)</div><div class="v t-bull">${R.passes}</div></div>
+    <div class="kpi"><div class="l">Quemados</div><div class="v t-bear">${R.fails}</div></div>
   </div>
-  <p class="note">${passes?`Días promedio para aprobar: <b>${Math.round(passDays.reduce((x,y)=>x+y,0)/passDays.length)}</b>. `:''}Simulación secuencial con riesgo ${(riskPct*100).toFixed(1)}% por trade sobre cuenta de $${acc.toLocaleString()}: cada vez que se aprueba o se quema, arranca un intento nuevo. No incluye el filtro de noticias (en vivo te habría protegido en eventos macro) ni slippage extremo.</p>`;
-
-  // sesiones
+  <p class="note">${R.passes?`Días promedio para aprobar: <b>${Math.round(R.passDays.reduce((x,y)=>x+y,0)/R.passDays.length)}</b>. `:''}Riesgo ${(R.riskPct*100).toFixed(1)}% por trade, cuenta $${R.acc.toLocaleString()}, sin filtro de noticias ni slippage extremo.</p>`;
   const sess=[['Asia (00–07 UTC)',0,7],['Londres (07–12)',7,12],['LDN+NY (12–16)',12,16],['NY (16–21)',16,21],['Tarde NY (21–24)',21,24]];
   $('sessTable').innerHTML='<tr><th>Sesión</th><th>Trades</th><th>WR</th><th>Exp (R)</th></tr>'+sess.map(([nm,h0,h1])=>{
-    const ts=trades.filter(t=>{const h=new Date(t.t).getUTCHours();return h>=h0&&h<h1;});
+    const ts=R.trades.filter(t=>{const h=new Date(t.t).getUTCHours();return h>=h0&&h<h1;});
     const s=stats(ts);
     return `<tr><td>${nm}</td><td>${s.n}</td><td>${s.n?s.wr.toFixed(0)+'%':'—'}</td><td class="${s.exp>=0?'t-bull':'t-bear'}">${s.n?s.exp.toFixed(2):'—'}</td></tr>`;
   }).join('');
-
-  // veredicto honesto
   const v=$('verdict'); let cls,txt;
-  if(g.n<30){ cls='mixed'; txt=`<b class="title">MUESTRA INSUFICIENTE</b>Solo ${g.n} trades: cualquier conclusión sería ruido. Amplía el periodo o relaja el umbral para obtener al menos 50–100 trades antes de juzgar.`; }
-  else if(b.n>=15&&b.pf>=1.2&&b.exp>0){ cls='good'; txt=`<b class="title">EDGE PLAUSIBLE — VALIDAR EN DEMO</b>Fuera de muestra el sistema mantiene PF ${fmtPF(b.pf)} y expectancy +${b.exp.toFixed(2)}R en ${b.n} trades. No es garantía: el siguiente paso correcto es 4–8 semanas en demo/paper con el semáforo activo antes de pagar un challenge.`; }
-  else if(a.pf>=1.1&&b.pf<1){ cls='bad'; txt=`<b class="title">SOBREAJUSTE DETECTADO</b>Gana dentro de muestra (PF ${fmtPF(a.pf)}) pero pierde fuera (PF ${fmtPF(b.pf)}). Las reglas se ajustaron al pasado, no al mercado. No operes esto en real: hay que simplificar reglas, no añadir más.`; }
-  else if(g.pf<1){ cls='bad'; txt=`<b class="title">SIN VENTAJA ESTADÍSTICA</b>PF ${fmtPF(g.pf)} y expectancy ${g.exp.toFixed(2)}R: tal como está, esta estrategia pierde dinero después de costos. Mejor saberlo aquí que con $${acc.toLocaleString()} de FTMO. Prueba: exigir score más alto, operar solo Londres/NY, o solo a favor de D1.`; }
-  else{ cls='mixed'; txt=`<b class="title">MARGINAL</b>PF ${fmtPF(g.pf)}, expectancy ${g.exp.toFixed(2)}R: sobrevive pero sin ventaja clara. Con spread real, slippage y noticias, probablemente quede en breakeven. Itera parámetros y compara siempre la columna fuera de muestra.`; }
-  v.className='verdict '+cls; v.innerHTML=txt+`<br><span class="t-dim" style="font-size:11px">Limitaciones: sin M1/M5 (pesos renormalizados), sin filtro de noticias histórico, SL asumido primero en velas ambiguas, sin swap nocturno. Resultados pasados no garantizan resultados futuros.</span>`;
-  window.scrollTo({top:$('results').offsetTop-10,behavior:'smooth'});
+  if(g.n<30){ cls='mixed'; txt=`<b class="title">MUESTRA INSUFICIENTE</b>Solo ${g.n} trades: amplía el periodo antes de concluir nada.`; }
+  else if(R.b.n>=30&&R.b.pf>=1.2&&R.b.exp>0){ cls='good'; txt=`<b class="title">EDGE PLAUSIBLE — VALIDAR EN DEMO</b>Fuera de muestra: PF ${fmtPF(R.b.pf)}, expectancy +${R.b.exp.toFixed(2)}R en ${R.b.n} trades. Siguiente paso correcto: 4–8 semanas en demo con el semáforo de noticias activo antes de pagar un challenge. Esto sigue sin ser garantía.`; }
+  else if(R.a.pf>=1.1&&R.b.pf<1){ cls='bad'; txt=`<b class="title">SOBREAJUSTE</b>Gana dentro (PF ${fmtPF(R.a.pf)}) pero pierde fuera (PF ${fmtPF(R.b.pf)}). No operar en real.`; }
+  else if(g.pf<1){ cls='bad'; txt=`<b class="title">SIN VENTAJA ESTADÍSTICA</b>PF ${fmtPF(g.pf)}, expectancy ${g.exp.toFixed(2)}R: pierde después de costos. Hipótesis descartada — eso también es avanzar.`; }
+  else{ cls='mixed'; txt=`<b class="title">MARGINAL</b>PF ${fmtPF(g.pf)} global, fuera de muestra PF ${fmtPF(R.b.pf)}: sobrevive sin ventaja clara. En vivo, los costos reales probablemente la dejen en breakeven.`; }
+  v.className='verdict '+cls;
+  v.innerHTML=txt+`<br><span class="t-dim" style="font-size:11px">Sin filtro de noticias histórico · SL primero en velas ambiguas · sin swap · resultados pasados no garantizan resultados futuros.</span>`;
+}
+
+/* ---------- Comparativa ---------- */
+function runCompare(){
+  const acc=+$('pAcc').value, riskPct=+$('pRisk').value/100;
+  const rows=[];
+  for(const id of ['rango','pullback','score']){
+    const R=report(simulate(id), acc, riskPct);
+    const pass = R.b.n>=30 && R.b.pf>=1.2 && R.b.exp>0;
+    rows.push({id,R,pass});
+  }
+  $('cmpPanel').classList.remove('hidden');
+  $('cmpTable').innerHTML=`<tr><th>Estrategia</th><th>Trades</th><th>PF total</th><th>PF fuera</th><th>Exp fuera</th><th>FTMO ✓/✗</th><th>Filtro</th></tr>`+
+    rows.map(r=>`<tr class="${r.pass?'winner':''}">
+      <td>${STRATS[r.id].name}</td><td>${r.R.g.n}</td>
+      <td class="${r.R.g.pf>=1?'t-bull':'t-bear'}">${fmtPF(r.R.g.pf)}</td>
+      <td class="${r.R.b.pf>=1?'t-bull':'t-bear'}"><b>${fmtPF(r.R.b.pf)}</b></td>
+      <td class="${r.R.b.exp>=0?'t-bull':'t-bear'}">${r.R.b.exp.toFixed(2)}</td>
+      <td>${r.R.passes}/${r.R.fails}</td>
+      <td>${r.pass?'<span class="t-bull">PASA</span>':'<span class="t-bear">NO</span>'}</td></tr>`).join('');
+  const best=rows.find(r=>r.pass);
+  renderDetail(best?best.id:rows[0].id, best?best.R:rows[0].R);
+  if(best) $('strat').value=best.id, $('stratDesc').textContent=DESC[best.id];
 }
 
 $('btnLoad').onclick=loadData;
-$('btnRun').onclick=()=>{ $('btnRun').textContent='Calculando…'; setTimeout(()=>{ runBacktest(); $('btnRun').textContent='Ejecutar backtest'; },50); };
+$('btnRun').onclick=()=>{ $('btnRun').textContent='Calculando…'; setTimeout(()=>{
+  const id=$('strat').value;
+  renderDetail(id, report(simulate(id), +$('pAcc').value, +$('pRisk').value/100));
+  $('btnRun').textContent='Ejecutar backtest';
+},50); };
+$('btnCompare').onclick=()=>{ $('btnCompare').textContent='Comparando…'; setTimeout(()=>{
+  runCompare(); $('btnCompare').textContent='Comparar las 3';
+},50); };
 </script>
 </body>
 </html>
