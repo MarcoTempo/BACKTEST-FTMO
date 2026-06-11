@@ -189,11 +189,12 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
     <div><label>Riesgo</label><select id="cRisk"><option value="0.25">0.25%</option><option value="0.5" selected>0.50%</option><option value="1">1%</option></select></div>
   </div>
   <div class="grid3i">
-    <div><label>Entrada</label><input id="cEntry" type="number" step="0.00001" placeholder="1.08500"></div>
-    <div><label>Stop Loss</label><input id="cSl" type="number" step="0.00001" placeholder="1.08300"></div>
-    <div><label>Take Profit</label><input id="cTp" type="number" step="0.00001" placeholder="1.08900"></div>
+    <div><label>Entrada</label><input id="cEntry" type="text" inputmode="decimal" placeholder="1.08500"></div>
+    <div><label>Stop Loss</label><input id="cSl" type="text" inputmode="decimal" placeholder="1.08300"></div>
+    <div><label>Take Profit</label><input id="cTp" type="text" inputmode="decimal" placeholder="1.08900"></div>
   </div>
   <button class="btn" id="btnCalc">Calcular</button>
+  <p class="note" id="calcMsg"></p>
   <div class="res">
     <div class="kpi"><div class="l">Lote exacto</div><div class="v gold" id="rLot">—</div></div>
     <div class="kpi"><div class="l">Riesgo</div><div class="v" id="rRisk">—</div></div>
@@ -221,10 +222,16 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
 
 <!-- NOTICIAS -->
 <section class="panel">
-  <div class="ph"><h2>Filtro de noticias</h2><span class="s">CPI · NFP · FOMC · tasas</span></div>
-  <button class="btn ghost sm" id="btnCal">⟳ Cargar calendario</button>
+  <div class="ph"><h2>Filtro de noticias</h2><span class="s" id="calMeta">solo alto impacto · USD/EUR</span></div>
+  <button class="btn ghost sm" id="btnCal">⟳ Actualizar ahora</button>
   <div id="evList" style="margin-top:8px"><div class="empty">Carga el calendario para activar el filtro.</div></div>
   <p class="note">Regla dura: con evento de alto impacto USD/EUR en las próximas 2 horas, la página entera se pone en rojo y el veredicto se bloquea.</p>
+  <label>Evento manual (si el feed falla)</label>
+  <div class="grid2i">
+    <input id="mevT" placeholder="NFP / CPI / FOMC…">
+    <input id="mevD" type="datetime-local">
+  </div>
+  <button class="btn ghost sm" id="btnMev" style="margin-top:10px">Añadir evento de alto impacto</button>
 </section>
 
 <!-- REGLAS -->
@@ -247,8 +254,8 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
   <div class="ph"><h2>Registrar operación</h2><span class="s">demo · alimenta el panel</span></div>
   <div class="grid3i">
     <div><label>Dirección</label><select id="jDir"><option>COMPRA</option><option>VENTA</option></select></div>
-    <div><label>Resultado USD</label><input id="jPnl" type="number" step="0.01" placeholder="-50 / +100"></div>
-    <div><label>RR logrado</label><input id="jRr" type="number" step="0.1" placeholder="2.0"></div>
+    <div><label>Resultado USD</label><input id="jPnl" type="text" inputmode="decimal" placeholder="-50 / +100"></div>
+    <div><label>Riesgo USD del trade</label><input id="jRisk" type="text" inputmode="decimal" placeholder="50"></div>
   </div>
   <button class="btn ghost" id="btnAdd">Guardar en el diario</button>
   <div id="tradeList" style="margin-top:12px"><div class="empty">Sin operaciones registradas.</div></div>
@@ -292,6 +299,7 @@ const S={
   journal:store.get('sn_journal',[]),
   events:store.get('sn_events',[]),
   psy:store.get('sn_psy',{day:'',ans:[null,null,null,null]}),
+  calTs:store.get('sn_calts',null),
   trend:null, lastCalc:null
 };
 const ACC=10000;
@@ -375,13 +383,14 @@ async function loadCal(){
   try{
     const r=await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json');
     const j=await r.json();
-    S.events=j.filter(e=>['USD','EUR'].includes(e.country))
-      .map(e=>({title:e.title,cur:e.country,ts:new Date(e.date).getTime(),
-        impact:e.impact==='High'?'H':e.impact==='Medium'?'M':'L'}))
-      .sort((a,b)=>a.ts-b.ts);
-    store.set('sn_events',S.events);
-  }catch(e){}
-  $('btnCal').disabled=false;$('btnCal').textContent='⟳ Cargar calendario';
+    const auto=j.filter(e=>['USD','EUR'].includes(e.country)&&e.impact==='High')
+      .map(e=>({title:e.title,cur:e.country,ts:new Date(e.date).getTime(),impact:'H'}));
+    S.events=[...S.events.filter(e=>e.manual),...auto].sort((a,b)=>a.ts-b.ts);
+    S.calTs=Date.now(); store.set('sn_events',S.events); store.set('sn_calts',S.calTs);
+    S.calError=null;
+  }catch(e){ S.calError=e.message||'red bloqueada o límite del feed'; }
+  $('btnCal').disabled=false;$('btnCal').textContent='⟳ Actualizar ahora';
+  if(S.calTs)$('calMeta').textContent='alto impacto · actualizado '+new Date(S.calTs).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   renderCal();renderAll();
 }
 function newsBlock(){ // alto impacto en próximas 2h o últimos 30 min
@@ -400,7 +409,7 @@ function renderCal(){
       <span class="t">${new Date(e.ts).toLocaleString([],{weekday:'short',hour:'2-digit',minute:'2-digit'})}</span>
       <span class="cur">${e.cur}</span><span>${e.title}</span>
       <span class="imp ${e.impact}">${e.impact==='H'?'ALTO':e.impact==='M'?'MEDIO':'BAJO'}</span>
-    </div>`).join(''):'<div class="empty">Carga el calendario para activar el filtro.</div>';
+    </div>`).join(''):'<div class="empty">'+(S.calError?'No se pudo cargar el calendario ('+S.calError+'). Si estás en la vista previa del chat, ábrelo desde tu URL de Vercel. Mientras, añade el evento manual abajo.':'Sin eventos de alto impacto cargados todavía.')+'</div>';
 }
 
 /* ---------- psicología ---------- */
@@ -433,17 +442,25 @@ function renderPsy(){
 
 /* ---------- calculadora ---------- */
 function calc(){
-  const bal=+$('cBal').value||0, rp=+$('cRisk').value, e=+$('cEntry').value, sl=+$('cSl').value, tp=+$('cTp').value;
-  if(!bal||!e||!sl){S.lastCalc=null;renderAll();return;}
+  const num=id=>{const v=String($(id).value||'').trim().replace(',','.');return v?parseFloat(v):NaN;};
+  const bal=num('cBal'), rp=+$('cRisk').value, e=num('cEntry'), sl=num('cSl'), tp=num('cTp');
+  const msg=t=>{$('calcMsg').textContent=t;};
+  S.lastCalc=null;
+  $('rLot').textContent='—';$('rRisk').textContent='—';$('rGain').textContent='—';$('rRR').textContent='—';
+  if(!bal||bal<=0){msg('Falta el balance.');renderAll();return;}
+  if(isNaN(e)){msg('Falta el precio de entrada (usa punto decimal, ej. 1.08500).');renderAll();return;}
+  if(isNaN(sl)){msg('Falta el Stop Loss.');renderAll();return;}
   const slPips=Math.abs(e-sl)*10000;
-  if(slPips<1){S.lastCalc=null;renderAll();return;}
+  if(slPips<0.5){msg('Entrada y SL están casi iguales: revisa los precios ('+slPips.toFixed(1)+' pips de distancia).');renderAll();return;}
   const riskUsd=bal*rp/100, lot=riskUsd/(slPips*10);
-  const rr= tp? Math.abs(tp-e)/Math.abs(e-sl) : null;
+  const rr=(!isNaN(tp)&&tp)?Math.abs(tp-e)/Math.abs(e-sl):null;
   S.lastCalc={riskPct:rp,rr,lot,riskUsd,gain:rr?riskUsd*rr:null};
   $('rLot').textContent=lot.toFixed(2);
   $('rRisk').textContent='$'+riskUsd.toFixed(0)+' ('+rp+'%)';
   $('rGain').textContent=S.lastCalc.gain!=null?'$'+S.lastCalc.gain.toFixed(0):'—';
   $('rRR').textContent=rr?'1:'+rr.toFixed(1):'—';
+  msg(rr&&rr<2?'⚠ RR 1:'+rr.toFixed(1)+' — tu regla exige mínimo 1:2.':'✓ SL de '+slPips.toFixed(1)+' pips.');
+  $('jRisk')&&($('jRisk').value=riskUsd.toFixed(0));
   renderAll();
 }
 
@@ -456,7 +473,7 @@ function jstats(){
     pnl+=t.pnl;
     if(new Date(t.ts).toDateString()===today){tPnl+=t.pnl;if(t.pnl<0)lossToday++;}
     if(t.pnl>0){w++;gw+=t.pnl;}else if(t.pnl<0){l++;gl-=t.pnl;}
-    if(t.rr){rrS+=t.rr;rrN++;}
+    if(t.rr!=null&&t.pnl>0){rrS+=t.rr;rrN++;}
     if(t.ts>=wkAgo)wk+=t.pnl; if(t.ts>=moAgo)mo+=t.pnl;
   }
   return {n:j.length,pnl,tPnl,w,l,gw,gl,lossToday,wk,mo,
@@ -501,7 +518,7 @@ function renderStats(){
 function renderJournal(){
   $('tradeList').innerHTML=S.journal.length?S.journal.slice().reverse().slice(0,12).map(t=>`
     <div class="trade"><div><b class="${t.dir==='COMPRA'?'s-up':'s-dn'}">${t.dir}</b>
-      <div class="meta">${new Date(t.ts).toLocaleString()} ${t.rr?'· RR 1:'+t.rr:''}</div></div>
+      <div class="meta">${new Date(t.ts).toLocaleString()} ${t.rr!=null?'· R '+(t.rr>=0?'+':'')+t.rr:''}</div></div>
       <div style="display:flex;gap:8px;align-items:center">
         <b class="${t.pnl>=0?'s-up':'s-dn'}">${t.pnl>=0?'+':''}$${t.pnl.toFixed(0)}</b>
         <button class="del" data-id="${t.id}">✕</button></div></div>`).join('')
@@ -552,16 +569,28 @@ $('btnScan').onclick=scan;
 $('btnCal').onclick=loadCal;
 $('btnCalc').onclick=calc;
 $('ckZone').onchange=renderChecks;
+$('btnMev').onclick=()=>{
+  const t=$('mevT').value.trim(), d=$('mevD').value;
+  if(!t||!d){alert('Pon título y fecha/hora.');return;}
+  S.events.push({title:t,cur:'—',ts:new Date(d).getTime(),impact:'H',manual:true});
+  S.events.sort((a,b)=>a.ts-b.ts);store.set('sn_events',S.events);
+  $('mevT').value='';renderCal();renderAll();
+};
 $('btnAdd').onclick=()=>{
-  const pnl=+$('jPnl').value;
+  const pnl=parseFloat(String($('jPnl').value||'').replace(',','.'));
   if(isNaN(pnl)){alert('Introduce el resultado en USD.');return;}
-  S.journal.push({id:String(Date.now()),ts:Date.now(),dir:$('jDir').value,pnl,rr:+$('jRr').value||null});
+  let risk=parseFloat(String($('jRisk').value||'').replace(',','.'));
+  if(isNaN(risk)||risk<=0) risk=(ACC+jstats().pnl)*0.005;   // por defecto 0.5% del balance actual
+  const rr=+(pnl/risk).toFixed(2);                           // RR automático
+  S.journal.push({id:String(Date.now()),ts:Date.now(),dir:$('jDir').value,pnl,risk,rr});
   store.set('sn_journal',S.journal);
-  $('jPnl').value='';$('jRr').value='';
+  $('jPnl').value='';
   renderAll();
 };
 $('apiKey').value=S.key;
 renderCal();renderAll();
+loadCal();                                  // carga automática al abrir
+setInterval(loadCal, 4*3600000);            // refresco cada 4 horas
 setInterval(()=>{renderChecks();renderBanner();},30000);
 </script>
 </body>
