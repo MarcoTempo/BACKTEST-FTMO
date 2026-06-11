@@ -130,8 +130,6 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
 </head>
 <body>
 
-<div id="newsBan">⚠️ PROHIBIDO OPERAR — NOTICIA DE ALTO IMPACTO<small id="newsBanSub"></small></div>
-
 <header class="hero">
   <div class="mark">Hedge-grade discipline</div>
   <h1>FTMO <b>SNIPER</b> EUR/USD</h1>
@@ -168,6 +166,7 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
   <div class="ph"><h2>Modo francotirador</h2><span class="s">¿existe una operación válida?</span></div>
   <div id="checks"></div>
   <div class="manual"><input type="checkbox" id="ckZone"><label for="ckZone" style="margin:0;text-transform:none;font-size:12px;color:var(--txt)">Confirmo: el precio está en una zona importante (soporte/resistencia, OB, FVG)</label></div>
+  <div class="manual"><input type="checkbox" id="ckNews"><label for="ckNews" style="margin:0;text-transform:none;font-size:12px;color:var(--txt)">Confirmo: revisé el calendario y NO hay noticia de alto impacto en las próximas 2 horas</label></div>
   <div class="verdict stop" id="verdict">🔴 NO OPERAR</div>
 </section>
 
@@ -218,20 +217,6 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
     <div class="kpi"><div class="l">Perdidas</div><div class="v s-dn" id="fL">0</div></div>
     <div class="kpi"><div class="l">Win rate</div><div class="v" id="fWr">—</div></div>
   </div>
-</section>
-
-<!-- NOTICIAS -->
-<section class="panel">
-  <div class="ph"><h2>Filtro de noticias</h2><span class="s" id="calMeta">solo alto impacto · USD/EUR</span></div>
-  <button class="btn ghost sm" id="btnCal">⟳ Actualizar ahora</button>
-  <div id="evList" style="margin-top:8px"><div class="empty">Carga el calendario para activar el filtro.</div></div>
-  <p class="note">Regla dura: con evento de alto impacto USD/EUR en las próximas 2 horas, la página entera se pone en rojo y el veredicto se bloquea.</p>
-  <label>Evento manual (si el feed falla)</label>
-  <div class="grid2i">
-    <input id="mevT" placeholder="NFP / CPI / FOMC…">
-    <input id="mevD" type="datetime-local">
-  </div>
-  <button class="btn ghost sm" id="btnMev" style="margin-top:10px">Añadir evento de alto impacto</button>
 </section>
 
 <!-- REGLAS -->
@@ -297,9 +282,7 @@ const store={
 const S={
   key:store.get('sn_key',''),
   journal:store.get('sn_journal',[]),
-  events:store.get('sn_events',[]),
   psy:store.get('sn_psy',{day:'',ans:[null,null,null,null]}),
-  calTs:store.get('sn_calts',null),
   trend:null, lastCalc:null
 };
 const ACC=10000;
@@ -377,41 +360,6 @@ function renderTrend(){
   $('strengthBar').style.width=Math.min(100,strength)+'%';
 }
 
-/* ---------- noticias ---------- */
-async function loadCal(){
-  $('btnCal').disabled=true;$('btnCal').textContent='Cargando…';
-  try{
-    const r=await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json');
-    const j=await r.json();
-    const auto=j.filter(e=>['USD','EUR'].includes(e.country)&&e.impact==='High')
-      .map(e=>({title:e.title,cur:e.country,ts:new Date(e.date).getTime(),impact:'H'}));
-    S.events=[...S.events.filter(e=>e.manual),...auto].sort((a,b)=>a.ts-b.ts);
-    S.calTs=Date.now(); store.set('sn_events',S.events); store.set('sn_calts',S.calTs);
-    S.calError=null;
-  }catch(e){ S.calError=e.message||'red bloqueada o límite del feed'; }
-  $('btnCal').disabled=false;$('btnCal').textContent='⟳ Actualizar ahora';
-  if(S.calTs)$('calMeta').textContent='alto impacto · actualizado '+new Date(S.calTs).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  renderCal();renderAll();
-}
-function newsBlock(){ // alto impacto en próximas 2h o últimos 30 min
-  const now=Date.now();
-  for(const e of S.events){
-    if(e.impact!=='H')continue;
-    const dt=e.ts-now;
-    if(dt>=-30*60000&&dt<=2*3600000)return e;
-  }
-  return null;
-}
-function renderCal(){
-  const now=Date.now();
-  $('evList').innerHTML=S.events.length?S.events.map(e=>`
-    <div class="ev ${e.ts<now-30*60000?'past':''}">
-      <span class="t">${new Date(e.ts).toLocaleString([],{weekday:'short',hour:'2-digit',minute:'2-digit'})}</span>
-      <span class="cur">${e.cur}</span><span>${e.title}</span>
-      <span class="imp ${e.impact}">${e.impact==='H'?'ALTO':e.impact==='M'?'MEDIO':'BAJO'}</span>
-    </div>`).join(''):'<div class="empty">'+(S.calError?'No se pudo cargar el calendario ('+S.calError+'). Si estás en la vista previa del chat, ábrelo desde tu URL de Vercel. Mientras, añade el evento manual abajo.':'Sin eventos de alto impacto cargados todavía.')+'</div>';
-}
-
 /* ---------- psicología ---------- */
 function psyToday(){
   const day=new Date().toDateString();
@@ -442,27 +390,31 @@ function renderPsy(){
 
 /* ---------- calculadora ---------- */
 function calc(){
-  const num=id=>{const v=String($(id).value||'').trim().replace(',','.');return v?parseFloat(v):NaN;};
-  const bal=num('cBal'), rp=+$('cRisk').value, e=num('cEntry'), sl=num('cSl'), tp=num('cTp');
-  const msg=t=>{$('calcMsg').textContent=t;};
-  S.lastCalc=null;
-  $('rLot').textContent='—';$('rRisk').textContent='—';$('rGain').textContent='—';$('rRR').textContent='—';
-  if(!bal||bal<=0){msg('Falta el balance.');renderAll();return;}
-  if(isNaN(e)){msg('Falta el precio de entrada (usa punto decimal, ej. 1.08500).');renderAll();return;}
-  if(isNaN(sl)){msg('Falta el Stop Loss.');renderAll();return;}
-  const slPips=Math.abs(e-sl)*10000;
-  if(slPips<0.5){msg('Entrada y SL están casi iguales: revisa los precios ('+slPips.toFixed(1)+' pips de distancia).');renderAll();return;}
-  const riskUsd=bal*rp/100, lot=riskUsd/(slPips*10);
-  const rr=(!isNaN(tp)&&tp)?Math.abs(tp-e)/Math.abs(e-sl):null;
-  S.lastCalc={riskPct:rp,rr,lot,riskUsd,gain:rr?riskUsd*rr:null};
-  $('rLot').textContent=lot.toFixed(2);
-  $('rRisk').textContent='$'+riskUsd.toFixed(0)+' ('+rp+'%)';
-  $('rGain').textContent=S.lastCalc.gain!=null?'$'+S.lastCalc.gain.toFixed(0):'—';
-  $('rRR').textContent=rr?'1:'+rr.toFixed(1):'—';
-  msg(rr&&rr<2?'⚠ RR 1:'+rr.toFixed(1)+' — tu regla exige mínimo 1:2.':'✓ SL de '+slPips.toFixed(1)+' pips.');
-  $('jRisk')&&($('jRisk').value=riskUsd.toFixed(0));
-  renderAll();
+  try{
+    const num=id=>{const v=String($(id).value||'').trim().replace(',','.');return v?parseFloat(v):NaN;};
+    const bal=num('cBal'), rp=+$('cRisk').value, e=num('cEntry'), sl=num('cSl'), tp=num('cTp');
+    const msg=t=>{$('calcMsg').textContent=t;};
+    S.lastCalc=null;
+    $('rLot').textContent='—';$('rRisk').textContent='—';$('rGain').textContent='—';$('rRR').textContent='—';
+    if(!bal||bal<=0){msg('Falta el balance.');renderChecks();return;}
+    if(isNaN(e)){msg('Escribe el precio de entrada (ej. 1.08500).');renderChecks();return;}
+    if(isNaN(sl)){msg('Escribe el Stop Loss.');renderChecks();return;}
+    const slPips=Math.abs(e-sl)*10000;
+    if(slPips<0.5){msg('Entrada y SL casi iguales ('+slPips.toFixed(1)+' pips): revisa los precios.');renderChecks();return;}
+    if(slPips>500){msg('⚠ SL de '+slPips.toFixed(0)+' pips: parece un dedazo en la entrada o el SL. Revisa los precios.');renderChecks();return;}
+    const riskUsd=bal*rp/100, lot=riskUsd/(slPips*10);
+    const rr=(!isNaN(tp)&&tp)?Math.abs(tp-e)/Math.abs(e-sl):null;
+    S.lastCalc={riskPct:rp,rr,lot,riskUsd,gain:rr?riskUsd*rr:null};
+    $('rLot').textContent=lot.toFixed(2);
+    $('rRisk').textContent='$'+riskUsd.toFixed(0)+' ('+rp+'%)';
+    $('rGain').textContent=S.lastCalc.gain!=null?'$'+S.lastCalc.gain.toFixed(0):'—';
+    $('rRR').textContent=rr?'1:'+rr.toFixed(1):'—';
+    msg(rr&&rr<2?'⚠ RR 1:'+rr.toFixed(1)+' — tu regla exige mínimo 1:2.':'✓ SL de '+slPips.toFixed(1)+' pips. Cálculo en vivo.');
+    $('jRisk')&&($('jRisk').value=riskUsd.toFixed(0));
+    renderChecks();
+  }catch(err){ $('calcMsg').textContent='Error: '+err.message; }
 }
+['cBal','cRisk','cEntry','cSl','cTp'].forEach(id=>{$(id).oninput=calc;$(id).onchange=calc;});
 
 /* ---------- diario / FTMO / stats ---------- */
 function jstats(){
@@ -530,7 +482,7 @@ function renderJournal(){
 
 /* ---------- checklist francotirador ---------- */
 function renderChecks(){
-  const T=S.trend, st=jstats(), news=newsBlock();
+  const T=S.trend, st=jstats();
   const h=new Date().getUTCHours();
   const session=h>=7&&h<21;
   const bias=T&&T.H4.t!=='NEUTRAL'&&T.H4.t===T.M15.t?T.H4.t:null;
@@ -544,7 +496,7 @@ function renderChecks(){
     ['Confirmación M5', m5ok, T?T.M5.t:'—'],
     ['Riesgo ≤ 0.5%', riskOk, S.lastCalc?S.lastCalc.riskPct+'%':'usa la calculadora'],
     ['Relación mínima 1:2', rrOk, S.lastCalc&&S.lastCalc.rr?'1:'+S.lastCalc.rr.toFixed(1):'define TP'],
-    ['Sin noticias importantes (2h)', !news, news?news.title:'despejado'],
+    ['Sin noticias importantes (2h)', $('ckNews').checked, 'revísalo en tu calendario'],
     ['Sesión Londres / Nueva York', session, h+':00 UTC'],
     ['Menos de 2 pérdidas hoy', st.lossToday<2, st.lossToday+' pérdidas hoy'],
     ['Mente lista (dashboard psicológico)', psyOK(), '']
@@ -553,29 +505,16 @@ function renderChecks(){
     <div class="check ${ok?'ok':'no'}"><span class="box">${ok?'✓':'✕'}</span><span>${t}</span><span class="why">${why}</span></div>`).join('');
   const all=items.every(i=>i[1]);
   const v=$('verdict');
-  if(news){v.className='verdict stop';v.textContent='⚠️ PROHIBIDO OPERAR · NOTICIA';}
-  else if(all){v.className='verdict go';v.textContent='🟢 OPERACIÓN VÁLIDA';}
+  if(all){v.className='verdict go';v.textContent='🟢 OPERACIÓN VÁLIDA';}
   else{v.className='verdict stop';v.textContent='🔴 NO OPERAR';}
 }
-function renderBanner(){
-  const news=newsBlock(), ban=$('newsBan');
-  if(news){ban.className='on';$('newsBanSub').textContent=news.title+' · '+new Date(news.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
-  else ban.className='';
-}
-function renderAll(){renderTrend();renderPsy();renderFTMO();renderStats();renderJournal();renderChecks();renderBanner();}
+function renderAll(){renderTrend();renderPsy();renderFTMO();renderStats();renderJournal();renderChecks();}
 
 /* ---------- eventos ---------- */
 $('btnScan').onclick=scan;
-$('btnCal').onclick=loadCal;
 $('btnCalc').onclick=calc;
 $('ckZone').onchange=renderChecks;
-$('btnMev').onclick=()=>{
-  const t=$('mevT').value.trim(), d=$('mevD').value;
-  if(!t||!d){alert('Pon título y fecha/hora.');return;}
-  S.events.push({title:t,cur:'—',ts:new Date(d).getTime(),impact:'H',manual:true});
-  S.events.sort((a,b)=>a.ts-b.ts);store.set('sn_events',S.events);
-  $('mevT').value='';renderCal();renderAll();
-};
+$('ckNews').onchange=renderChecks;
 $('btnAdd').onclick=()=>{
   const pnl=parseFloat(String($('jPnl').value||'').replace(',','.'));
   if(isNaN(pnl)){alert('Introduce el resultado en USD.');return;}
@@ -588,10 +527,8 @@ $('btnAdd').onclick=()=>{
   renderAll();
 };
 $('apiKey').value=S.key;
-renderCal();renderAll();
-loadCal();                                  // carga automática al abrir
-setInterval(loadCal, 4*3600000);            // refresco cada 4 horas
-setInterval(()=>{renderChecks();renderBanner();},30000);
+renderAll();
+setInterval(renderChecks,30000);
 </script>
 </body>
 </html>
