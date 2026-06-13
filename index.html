@@ -125,6 +125,16 @@ canvas{width:100%;height:170px;background:var(--panel2);border:1px solid var(--l
 .del{background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:6px;padding:4px 9px;font-size:11px}
 .note{font-size:10.5px;color:var(--dim);margin-top:10px;line-height:1.6}
 .empty{color:var(--dim);text-align:center;padding:14px 6px;font-size:11.5px}
+ .setup{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--panel2)}
+.setup.buy{border-color:rgba(43,213,118,.5)} .setup.sell{border-color:rgba(255,77,94,.5)}
+.setup .dir{font-family:var(--disp);font-weight:800;font-size:20px;letter-spacing:.1em}
+.setup .lv{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
+.setup .lv .c{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+.setup .lv .c .l{font-size:9px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase}
+.setup .lv .c .v{font-family:var(--disp);font-weight:700;font-size:16px;margin-top:2px}
+.setup .reasons{font-size:11px;color:var(--dim);border-top:1px dashed var(--line);padding-top:8px;line-height:1.6}
+.setup .reasons li{margin:3px 0 3px 14px}
+.setup .disc{font-size:10px;color:var(--gold2);margin-top:10px;letter-spacing:.03em}
 footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);font-size:10px;text-align:center;letter-spacing:.04em;line-height:1.7}
 </style>
 </head>
@@ -159,6 +169,13 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
     <input id="apiKey" type="password" placeholder="API key TwelveData">
     <button class="btn" style="margin-top:0" id="btnScan">Analizar</button>
   </div>
+</section>
+
+<!-- SETUP SUGERIDO -->
+<section class="panel span2">
+  <div class="ph"><h2>Setup sugerido</h2><span class="s">entrada · SL · TP · lote — para que TÚ valides</span></div>
+  <div id="setupBox"><div class="empty">Pulsa <b style="color:var(--gold)">Generar setup</b>. Si H4 y M15 están alineados, aquí aparece la operación con todos los niveles calculados.</div></div>
+  <button class="btn" id="btnSetup">⊕ Generar setup</button>
 </section>
 
 <!-- FRANCOTIRADOR -->
@@ -292,6 +309,8 @@ const ema=(a,p)=>{const k=2/(p+1);let e=a[0];const o=[e];for(let i=1;i<a.length;
 function swings(c,k=2){const hi=[],lo=[];for(let i=k;i<c.length-k;i++){let H=true,L=true;
   for(let j=1;j<=k;j++){if(c[i].h<=c[i-j].h||c[i].h<=c[i+j].h)H=false;if(c[i].l>=c[i-j].l||c[i].l>=c[i+j].l)L=false;}
   if(H)hi.push(c[i].h);if(L)lo.push(c[i].l);}return{hi,lo};}
+function atr14(c,p=14){let s=0;const tr=[];for(let i=1;i<c.length;i++)tr.push(Math.max(c[i].h-c[i].l,Math.abs(c[i].h-c[i-1].c),Math.abs(c[i].l-c[i-1].c)));if(tr.length<p)return tr.reduce((a,b)=>a+b,0)/Math.max(1,tr.length);let a=tr.slice(0,p).reduce((x,y)=>x+y,0)/p;for(let i=p;i<tr.length;i++)a=(a*(p-1)+tr[i])/p;return a;}
+function lastSwing(c,dir,k=2){for(let i=c.length-1-k;i>=k;i--){let ok=true;for(let j=1;j<=k;j++){if(dir==='lo'){if(c[i].l>=c[i-j].l||c[i].l>=c[i+j].l){ok=false;break;}}else{if(c[i].h<=c[i-j].h||c[i].h<=c[i+j].h){ok=false;break;}}}if(ok)return dir==='lo'?c[i].l:c[i].h;}return null;}
 function tfTrend(c){ // c cronológico
   const cl=c.map(x=>x.c), e20=ema(cl,20).at(-1), e50=ema(cl,50).at(-1), px=cl.at(-1);
   const sw=swings(c);
@@ -320,13 +339,14 @@ async function scan(){
     const out={};
     for(const [tf,iv] of [['H4','4h'],['M15','15min'],['M5','5min']]){
       const j=await td(`time_series?symbol=EUR/USD&interval=${iv}&outputsize=120&timezone=UTC`);
-      out[tf]=tfTrend(j.values.map(v=>({o:+v.open,h:+v.high,l:+v.low,c:+v.close})).reverse());
+      const c=j.values.map(v=>({o:+v.open,h:+v.high,l:+v.low,c:+v.close})).reverse();
+      out[tf]=tfTrend(c); out[tf].c=c; out[tf].px=c.at(-1).c; out[tf].atr=atr14(c);
       await sleep(1100);
     }
     S.trend={...out,ts:Date.now()};
     $('mktMeta').textContent='actualizado '+new Date().toLocaleTimeString();
   }catch(e){$('mktMeta').textContent='error: '+e.message;}
-  finally{$('btnScan').disabled=false;$('btnScan').textContent='Analizar';renderAll();}
+  finally{$('btnScan').disabled=false;$('btnScan').textContent='Analizar';renderAll();renderSetup();}
 }
 function renderTrend(){
   const T=S.trend;
@@ -481,6 +501,60 @@ function renderJournal(){
 }
 
 /* ---------- checklist francotirador ---------- */
+function buildSetup(bias){
+  const T=S.trend; if(!T||!bias) return null;
+  const m15=T.M15, px=T.M15.px, a=m15.atr;
+  const fmt=x=>x.toFixed(5);
+  let entry, sl, reasons=[];
+  if(bias==='ALCISTA'){
+    const sw=lastSwing(m15.c,'lo');
+    entry=px;
+    sl=(sw!=null?Math.min(sw,px-1.2*a):px-1.5*a)-0.3*a;
+    reasons=[`H4 alcista (dirección dominante)`,`M15 alineada al alza con estructura`,
+      sw!=null?`SL bajo el último mínimo estructural M15`:`SL a 1.5× ATR bajo el precio`,
+      `M5 ${T.M5.t==='ALCISTA'?'confirma':'aún no confirma'} el momentum`];
+  }else{
+    const sw=lastSwing(m15.c,'hi');
+    entry=px;
+    sl=(sw!=null?Math.max(sw,px+1.2*a):px+1.5*a)+0.3*a;
+    reasons=[`H4 bajista (dirección dominante)`,`M15 alineada a la baja con estructura`,
+      sw!=null?`SL sobre el último máximo estructural M15`:`SL a 1.5× ATR sobre el precio`,
+      `M5 ${T.M5.t==='BAJISTA'?'confirma':'aún no confirma'} el momentum`];
+  }
+  const risk=Math.abs(entry-sl);
+  const tp2= bias==='ALCISTA'? entry+2*risk : entry-2*risk;
+  const tp3= bias==='ALCISTA'? entry+3*risk : entry-3*risk;
+  const slPips=risk*10000;
+  const bal=ACC+jstats().pnl, rp=+($('cRisk').value||0.5);
+  const lot=(bal*rp/100)/(slPips*10);
+  return {side:bias==='ALCISTA'?'COMPRA':'VENTA', buy:bias==='ALCISTA',
+    entry:fmt(entry), sl:fmt(sl), tp2:fmt(tp2), tp3:fmt(tp3),
+    slPips:slPips.toFixed(1), lot:lot.toFixed(2), reasons};
+}
+function renderSetup(){
+  const box=$('setupBox'), T=S.trend;
+  if(!T){ box.innerHTML='<div class="empty">Primero pulsa <b style="color:var(--gold)">Analizar</b> arriba para leer el mercado, luego genera el setup.</div>'; return; }
+  const bias=T.H4.t!=='NEUTRAL'&&T.H4.t===T.M15.t?T.H4.t:null;
+  if(!bias){
+    box.innerHTML=`<div class="empty">⚪ Sin operación: H4 (${T.H4.t}) y M15 (${T.M15.t}) no están alineados. El Sniper no inventa entradas en conflicto — espera a que coincidan.</div>`;
+    return;
+  }
+  const s=buildSetup(bias); if(!s){box.innerHTML='<div class="empty">No se pudo calcular el setup. Vuelve a analizar.</div>';return;}
+  const m5 = T.M5.t===bias;
+  box.innerHTML=`<div class="setup ${s.buy?'buy':'sell'}">
+    <div class="dir ${s.buy?'s-up':'s-dn'}">${s.buy?'▲ COMPRA':'▼ VENTA'} EUR/USD</div>
+    <div class="lv">
+      <div class="c"><div class="l">Precio de entrada</div><div class="v">${s.entry}</div></div>
+      <div class="c"><div class="l">Lote a operar</div><div class="v gold">${s.lot}</div></div>
+      <div class="c"><div class="l">Stop Loss</div><div class="v s-dn">${s.sl}</div></div>
+      <div class="c"><div class="l">SL en pips</div><div class="v">${s.slPips}</div></div>
+      <div class="c"><div class="l">Take Profit 1:2</div><div class="v s-up">${s.tp2}</div></div>
+      <div class="c"><div class="l">Take Profit 1:3</div><div class="v s-up">${s.tp3}</div></div>
+    </div>
+    <ul class="reasons">${s.reasons.map(r=>`<li>${r}</li>`).join('')}${m5?'':'<li style="color:var(--gold)">⚠ M5 aún no confirma el momentum: espera vela de confirmación antes de entrar.</li>'}</ul>
+    <div class="disc">Propuesta calculada sobre la estructura M15 actual. NO es una orden: valídala en tu gráfico y con tus recursos antes de ejecutar. La entrada es una zona de referencia, no una garantía.</div>
+  </div>`;
+}
 function renderChecks(){
   const T=S.trend, st=jstats();
   const h=new Date().getUTCHours();
@@ -512,6 +586,7 @@ function renderAll(){renderTrend();renderPsy();renderFTMO();renderStats();render
 
 /* ---------- eventos ---------- */
 $('btnScan').onclick=scan;
+$('btnSetup').onclick=renderSetup;
 $('btnCalc').onclick=calc;
 $('ckZone').onchange=renderChecks;
 $('ckNews').onchange=renderChecks;
