@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>FTMO Sniper EUR/USD</title>
+<title>FTMO Sniper</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -131,6 +131,14 @@ canvas{width:100%;height:170px;background:var(--panel2);border:1px solid var(--l
 .zone:last-child{border-bottom:0}
 .zone .zn{color:var(--dim)} .zone .zp{font-weight:700} .zone .zd{font-size:10px;color:var(--dim);text-align:right}
 .zone.near .zp{color:var(--gold)} .zone.near{background:rgba(212,175,55,.06);border-radius:6px}
+.strong{border-radius:14px;padding:18px;text-align:center;border:1px solid var(--line);background:var(--panel2)}
+.strong .grade{font-family:var(--disp);font-weight:800;font-size:clamp(22px,6vw,30px);letter-spacing:.08em}
+.strong.s5{border-color:var(--gold);box-shadow:0 0 30px rgba(212,175,55,.18)}
+.strong.s4{border-color:rgba(43,213,118,.45)}
+.strong .layers{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-top:12px}
+.strong .lay{font-size:10px;letter-spacing:.06em;border:1px solid var(--line);border-radius:20px;padding:5px 11px;color:var(--dim)}
+.strong .lay.on{border-color:var(--gold2);color:var(--gold)}
+.strong .dirw{font-family:var(--disp);font-weight:800;font-size:18px;letter-spacing:.1em;margin-top:8px}
 .zlbl{font-size:9px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-bottom:4px}
 .setup{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--panel2)}
 .setup.buy{border-color:rgba(43,213,118,.5)} .setup.sell{border-color:rgba(255,77,94,.5)}
@@ -149,9 +157,9 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
 
 <header class="hero">
   <div class="mark">Hedge-grade discipline</div>
-  <h1>FTMO <b>SNIPER</b> EUR/USD</h1>
+  <h1>FTMO <b>SNIPER</b></h1>
   <div class="tag">“Las oportunidades son raras. La disciplina es permanente.”</div>
-  <div class="sub">FTMO Sniper EUR/USD — Solo las operaciones que merecen existir.</div>
+  <div class="sub">EUR/USD · XAU/USD — Solo las operaciones que merecen existir.</div>
 </header>
 
 <main>
@@ -173,11 +181,23 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
     <div class="bar"><i id="strengthBar"></i></div>
   </div>
   <div id="volBox" style="margin-top:12px"></div>
+  <div id="stochBox" style="margin-top:10px"></div>
   <div id="zonesBox" style="margin-top:10px"></div>
-  <div class="grid2i" style="margin-top:14px">
+  <label style="margin-top:14px">Instrumento</label>
+  <select id="symSel">
+    <option value="EUR/USD">EUR/USD</option>
+    <option value="XAU/USD">XAU/USD (Oro)</option>
+  </select>
+  <div class="grid2i" style="margin-top:10px">
     <input id="apiKey" type="password" placeholder="API key TwelveData">
     <button class="btn" style="margin-top:0" id="btnScan">Analizar</button>
   </div>
+</section>
+
+<!-- SEÑAL FUERTE -->
+<section class="panel span2">
+  <div class="ph"><h2>Señal del sistema</h2><span class="s">confluencia de todas las capas</span></div>
+  <div id="strongBox"><div class="empty">Pulsa Analizar. Aquí se gradúa la señal según cuántas capas de tu estrategia coinciden.</div></div>
 </section>
 
 <!-- SETUP SUGERIDO -->
@@ -196,37 +216,7 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
   <div class="verdict stop" id="verdict">🔴 NO OPERAR</div>
 </section>
 
-<!-- PSICOLÓGICO -->
-<section class="panel">
-  <div class="ph"><h2>Dashboard psicológico</h2><span class="s">obligatorio antes de operar</span></div>
-  <div class="q"><span>¿Estoy cansado?</span><div class="seg" data-q="0" data-goodanswer="no"><button data-v="si">Sí</button><button data-v="no">No</button></div></div>
-  <div class="q"><span>¿Estoy frustrado?</span><div class="seg" data-q="1" data-goodanswer="no"><button data-v="si">Sí</button><button data-v="no">No</button></div></div>
-  <div class="q"><span>¿Intento recuperar pérdidas?</span><div class="seg" data-q="2" data-goodanswer="no"><button data-v="si">Sí</button><button data-v="no">No</button></div></div>
-  <div class="q"><span>¿Estoy siguiendo mi plan?</span><div class="seg" data-q="3" data-goodanswer="si"><button data-v="si">Sí</button><button data-v="no">No</button></div></div>
-  <p class="note" id="psyNote">Responde las 4 preguntas. Se reinician cada día.</p>
-</section>
-
-<!-- CALCULADORA -->
-<section class="panel">
-  <div class="ph"><h2>Calculadora de riesgo</h2><span class="s">EUR/USD · $10/pip por lote</span></div>
-  <div class="grid2i">
-    <div><label>Balance USD</label><input id="cBal" type="number" value="10000"></div>
-    <div><label>Riesgo</label><select id="cRisk"><option value="0.25">0.25%</option><option value="0.5" selected>0.50%</option><option value="1">1%</option></select></div>
-  </div>
-  <div class="grid3i">
-    <div><label>Entrada</label><input id="cEntry" type="text" inputmode="decimal" placeholder="1.08500"></div>
-    <div><label>Stop Loss</label><input id="cSl" type="text" inputmode="decimal" placeholder="1.08300"></div>
-    <div><label>Take Profit</label><input id="cTp" type="text" inputmode="decimal" placeholder="1.08900"></div>
-  </div>
-  <button class="btn" id="btnCalc">Calcular</button>
-  <p class="note" id="calcMsg"></p>
-  <div class="res">
-    <div class="kpi"><div class="l">Lote exacto</div><div class="v gold" id="rLot">—</div></div>
-    <div class="kpi"><div class="l">Riesgo</div><div class="v" id="rRisk">—</div></div>
-    <div class="kpi"><div class="l">Ganancia potencial</div><div class="v" id="rGain">—</div></div>
-    <div class="kpi"><div class="l">Riesgo : Beneficio</div><div class="v" id="rRR">—</div></div>
-  </div>
-</section>
+<input type="hidden" id="cRisk" value="0.5">
 
 <!-- PANEL FTMO -->
 <section class="panel">
@@ -249,7 +239,7 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
 <section class="panel">
   <div class="ph"><h2>Reglas del sistema</h2><span class="s">no negociables</span></div>
   <ul class="rules">
-    <li><span class="n">1</span>Operar únicamente EUR/USD.</li>
+    <li><span class="n">1</span>Operar solo el instrumento analizado (EUR/USD u oro).</li>
     <li><span class="n">2</span>Máximo 2 operaciones perdedoras por día.</li>
     <li><span class="n">3</span>Riesgo máximo 0.5% por operación.</li>
     <li><span class="n">4</span>Nunca mover el Stop Loss.</li>
@@ -308,10 +298,16 @@ const store={
 const S={
   key:store.get('sn_key',''),
   journal:store.get('sn_journal',[]),
-  psy:store.get('sn_psy',{day:'',ans:[null,null,null,null]}),
   trend:null, lastCalc:null
 };
 const ACC=10000;
+/* parámetros por instrumento: pipFactor=cuántas unidades de precio son 1 "pip", pipValue=$ por pip por lote, round=paso de número redondo, dec=decimales */
+const INSTR={
+  'EUR/USD':{pipFactor:10000, pipValue:10, round:0.0050, dec:5},
+  'XAU/USD':{pipFactor:10,    pipValue:10, round:5,      dec:2}   // oro: 0.1 = 1 pip, lote estándar 100oz ≈ $10/pip
+};
+let SYMBOL=store.get('sn_symbol','EUR/USD');
+const cfg=()=>INSTR[SYMBOL];
 /* mercado forex: cierra vie 21:00 UTC, abre dom 21:00 UTC (aprox) */
 function marketOpen(){
   const d=new Date(), day=d.getUTCDay(), h=d.getUTCHours();
@@ -327,6 +323,43 @@ function swings(c,k=2){const hi=[],lo=[];for(let i=k;i<c.length-k;i++){let H=tru
   for(let j=1;j<=k;j++){if(c[i].h<=c[i-j].h||c[i].h<=c[i+j].h)H=false;if(c[i].l>=c[i-j].l||c[i].l>=c[i+j].l)L=false;}
   if(H)hi.push(c[i].h);if(L)lo.push(c[i].l);}return{hi,lo};}
 function atr14(c,p=14){let s=0;const tr=[];for(let i=1;i<c.length;i++)tr.push(Math.max(c[i].h-c[i].l,Math.abs(c[i].h-c[i-1].c),Math.abs(c[i].l-c[i-1].c)));if(tr.length<p)return tr.reduce((a,b)=>a+b,0)/Math.max(1,tr.length);let a=tr.slice(0,p).reduce((x,y)=>x+y,0)/p;for(let i=p;i<tr.length;i++)a=(a*(p-1)+tr[i])/p;return a;}
+function stoch(c,kP=14,kS=3,dS=3){
+  if(c.length<kP+kS+dS)return null;
+  const raw=[];
+  for(let i=kP-1;i<c.length;i++){
+    let hh=-1e9,ll=1e9;
+    for(let j=i-kP+1;j<=i;j++){hh=Math.max(hh,c[j].h);ll=Math.min(ll,c[j].l);}
+    raw.push(hh===ll?50:(c[i].c-ll)/(hh-ll)*100);
+  }
+  const sma=(arr,p)=>{const o=[];for(let i=p-1;i<arr.length;i++){let s=0;for(let j=i-p+1;j<=i;j++)s+=arr[j];o.push(s/p);}return o;};
+  const k=sma(raw,kS);          // %K suavizado
+  const d=sma(k,dS);            // %D
+  const n=Math.min(k.length,d.length);
+  const K=k.slice(-n), D=d.slice(-n);
+  return {k:K.at(-1),d:D.at(-1),kPrev:K.at(-2),dPrev:D.at(-2)};
+}
+function orderBlocks(c){
+  // OB = última vela contraria antes de un impulso que rompe el swing previo (BOS)
+  const obs=[]; const n=c.length; const k=2;
+  const sw=swings(c);
+  for(let i=10;i<n-3;i++){
+    // impulso alcista: 3 velas que cierran subiendo y rompen un máximo reciente
+    const up = c[i+1].c>c[i].h && c[i+2].c>c[i+1].c;
+    const dn = c[i+1].c<c[i].l && c[i+2].c<c[i+1].c;
+    if(up && c[i].c<c[i].o){ obs.push({type:'bull', top:c[i].h, bot:c[i].l, i}); }   // última bajista antes de subir
+    if(dn && c[i].c>c[i].o){ obs.push({type:'bear', top:c[i].h, bot:c[i].l, i}); }   // última alcista antes de bajar
+  }
+  return obs.slice(-6); // los más recientes
+}
+function obTouch(c, px){
+  const obs=orderBlocks(c);
+  // OB no mitigado más cercano que el precio esté tocando
+  for(let k=obs.length-1;k>=0;k--){
+    const o=obs[k];
+    if(px>=o.bot && px<=o.top) return o;
+  }
+  return null;
+}
 function lastSwing(c,dir,k=2){for(let i=c.length-1-k;i>=k;i--){let ok=true;for(let j=1;j<=k;j++){if(dir==='lo'){if(c[i].l>=c[i-j].l||c[i].l>=c[i+j].l){ok=false;break;}}else{if(c[i].h<=c[i-j].h||c[i].h<=c[i+j].h){ok=false;break;}}}if(ok)return dir==='lo'?c[i].l:c[i].h;}return null;}
 function tfTrend(c0){ // c0 cronológico; se ignora la última vela (en formación)
   const c = c0.length>3 ? c0.slice(0,-1) : c0;          // vela actual sin cerrar = ruido → fuera
@@ -358,20 +391,22 @@ async function scan(){
   if(!marketOpen()){
     $('mktMeta').textContent='⚠ mercado cerrado · datos congelados';
     $('bigTrend').textContent='⚪ MERCADO CERRADO';$('bigTrend').className='val s-neu';
-    $('setupBox') && ($('setupBox').innerHTML='<div class="empty">El mercado de EUR/USD está cerrado (fin de semana). Los precios no se mueven, así que el análisis sería sobre datos congelados del viernes. Vuelve cuando abra: domingo ~17:00 hora de Nueva York.</div>');
+    $('setupBox') && ($('setupBox').innerHTML='<div class="empty">El mercado está cerrado (fin de semana). Los precios no se mueven, así que el análisis sería sobre datos congelados del viernes. Vuelve cuando abra: domingo ~17:00 hora de Nueva York.</div>');
     return;
   }
   $('btnScan').disabled=true;$('btnScan').textContent='Analizando…';
   try{
     const out={};
     for(const [tf,iv] of [['H4','4h'],['M15','15min'],['M5','5min']]){
-      const j=await td(`time_series?symbol=EUR/USD&interval=${iv}&outputsize=120&timezone=UTC`);
+      const j=await td(`time_series?symbol=${encodeURIComponent(SYMBOL)}&interval=${iv}&outputsize=120&timezone=UTC`);
       const c=j.values.map(v=>({o:+v.open,h:+v.high,l:+v.low,c:+v.close})).reverse();
       out[tf]=tfTrend(c); out[tf].c=c; out[tf].px=c.at(-1).c; out[tf].atr=atr14(c);
       await sleep(1100);
     }
     out.zones=keyZones(out.M15.c, out.M15.px);
     out.vol=volRegime(out.M15);
+    out.stoch=stoch(out.M5.c.slice(0,-1));   // sobre velas M5 cerradas
+    out.ob=obTouch(out.M15.c.slice(0,-1), out.M15.px);
     S.trend={...out,ts:Date.now()};
     $('mktMeta').textContent='actualizado '+new Date().toLocaleTimeString();
   }catch(e){$('mktMeta').textContent='error: '+e.message;}
@@ -385,9 +420,10 @@ function keyZones(c, px){
     z.push({name:'Máx día previo', price:Math.max(...yest.map(b=>b.h))});
     z.push({name:'Mín día previo', price:Math.min(...yest.map(b=>b.l))});
   }
-  const base=Math.round(px*200)/200; // múltiplos de 0.0050 (50 pips)
-  [base-0.005, base, base+0.005].forEach(p=>{ if(p>0) z.push({name:'Número redondo', price:p}); });
-  return z.map(zz=>({...zz, pips:(zz.price-px)*10000, near:Math.abs(zz.price-px)<a}))
+  const R=cfg().round, PF=cfg().pipFactor;
+  const base=Math.round(px/R)*R;
+  [base-R, base, base+R].forEach(p=>{ if(p>0) z.push({name:'Número redondo', price:p}); });
+  return z.map(zz=>({...zz, pips:(zz.price-px)*PF, near:Math.abs(zz.price-px)<a}))
           .sort((x,y)=>Math.abs(x.pips)-Math.abs(y.pips));
 }
 /* ---------- régimen de volatilidad ---------- */
@@ -400,7 +436,60 @@ function volRegime(m15){
   let state='NORMAL', ok=true, why='volatilidad sana para operar';
   if(ratio<0.65){state='BAJA';ok=false;why='mercado dormido: movimientos chicos';}
   else if(ratio>1.6){state='ALTA';ok=false;why='volatilidad disparada (posible post-noticia): espera';}
-  return {state,ok,why,atrPips:(a*10000).toFixed(1),ratio:ratio.toFixed(2)};
+  return {state,ok,why,atrPips:(a*cfg().pipFactor).toFixed(1),ratio:ratio.toFixed(2)};
+}
+function strongSignal(){
+  const T=S.trend; if(!T)return null;
+  const bias=T.H4.t!=='NEUTRAL'&&T.H4.t===T.M15.t?T.H4.t:null;
+  const sg=stochSignal();
+  const wantBull=bias==='ALCISTA';
+  const layers=[
+    {name:'Dirección H4+M15', on:!!bias},
+    {name:'Volatilidad sana', on:!!(T.vol&&T.vol.ok)},
+    {name:'Order block', on:!!(T.ob && ((wantBull&&T.ob.type==='bull')||(!wantBull&&bias&&T.ob.type==='bear')))},
+    {name:'Zona clave', on:!!(T.zones&&T.zones.some(z=>z.near))},
+    {name:'Gatillo estocástico', on:!!(sg&&sg.fire)}
+  ];
+  const score=layers.filter(l=>l.on).length;
+  return {bias,layers,score,wantBull};
+}
+function renderStrong(){
+  const box=$('strongBox'), R=strongSignal();
+  if(!R||!R.bias){ box.innerHTML='<div class="empty">⚪ Sin dirección clara (H4/M15 en conflicto). El sistema no emite señal.</div>'; return; }
+  let grade, cls, msg;
+  if(R.score>=5){grade='🔥 SEÑAL FUERTE';cls='s5';msg='Las 5 capas de tu estrategia coinciden.';}
+  else if(R.score===4){grade='✅ SEÑAL SÓLIDA';cls='s4';msg='4 de 5 capas alineadas.';}
+  else if(R.score===3){grade='⚪ SEÑAL NORMAL';cls='';msg='3 de 5 capas. Considera esperar más confluencia.';}
+  else{grade='🔴 SIN SEÑAL';cls='';msg='Solo '+R.score+'/5 capas. No hay confluencia suficiente.';}
+  const dir=R.wantBull?'▲ COMPRA':'▼ VENTA';
+  box.innerHTML=`<div class="strong ${cls}">
+    <div class="grade ${R.score>=4?(R.wantBull?'s-up':'s-dn'):'s-neu'}">${grade}</div>
+    ${R.score>=3?`<div class="dirw ${R.wantBull?'s-up':'s-dn'}">${dir} ${SYMBOL}</div>`:''}
+    <div style="color:var(--dim);font-size:12px;margin-top:6px">${msg}</div>
+    <div class="layers">${R.layers.map(l=>`<span class="lay ${l.on?'on':''}">${l.on?'✓':'○'} ${l.name}</span>`).join('')}</div>
+  </div>`;
+}
+function stochSignal(){
+  const T=S.trend; if(!T||!T.stoch)return null;
+  const st=T.stoch, bias=T.H4.t!=='NEUTRAL'&&T.H4.t===T.M15.t?T.H4.t:null;
+  const crossUp = st.kPrev<=st.dPrev && st.k>st.d;     // %K cruza arriba de %D
+  const crossDn = st.kPrev>=st.dPrev && st.k<st.d;
+  let fire=false, txt='sin gatillo · espera';
+  if(bias==='ALCISTA'){
+    if(st.k<20||st.d<20){ if(crossUp){fire=true;txt='✓ sobreventa + cruce al alza: gatillo de COMPRA';} else txt='en sobreventa, espera el cruce al alza'; }
+    else txt='a favor de compra, pero sin retroceso a sobreventa';
+  }else if(bias==='BAJISTA'){
+    if(st.k>80||st.d>80){ if(crossDn){fire=true;txt='✓ sobrecompra + cruce a la baja: gatillo de VENTA';} else txt='en sobrecompra, espera el cruce a la baja'; }
+    else txt='a favor de venta, pero sin repunte a sobrecompra';
+  }else txt='sin sesgo claro (H4/M15 en conflicto)';
+  return {fire,txt,k:st.k,d:st.d,bias};
+}
+function renderStoch(){
+  const box=$('stochBox'), sg=stochSignal();
+  if(!sg){box.innerHTML='';return;}
+  const col=sg.fire?'s-up':'s-neu';
+  const zone=sg.k>80?'SOBRECOMPRA':sg.k<20?'SOBREVENTA':'NEUTRO';
+  box.innerHTML=`<div class="volcard"><div><div class="zlbl">Estocástico 14,3,3 (M5)</div><span class="st ${col}">%K ${sg.k.toFixed(0)} · %D ${sg.d.toFixed(0)}</span> · ${zone}</div><div style="text-align:right;color:var(--dim);max-width:52%">${sg.txt}</div></div>`;
 }
 function renderVolZones(){
   const T=S.trend;
@@ -443,62 +532,6 @@ function renderTrend(){
   $('strengthV').textContent=Math.min(100,strength)+' / 100';
   $('strengthBar').style.width=Math.min(100,strength)+'%';
 }
-
-/* ---------- psicología ---------- */
-function psyToday(){
-  const day=new Date().toDateString();
-  if(S.psy.day!==day){S.psy={day,ans:[null,null,null,null]};store.set('sn_psy',S.psy);}
-  return S.psy;
-}
-function psyOK(){
-  const p=psyToday(), good=['no','no','no','si'];
-  return p.ans.every((a,i)=>a===good[i]);
-}
-document.querySelectorAll('.seg').forEach(seg=>{
-  seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-    const p=psyToday(); p.ans[+seg.dataset.q]=b.dataset.v; store.set('sn_psy',S.psy);
-    renderPsy(); renderAll();
-  });
-});
-function renderPsy(){
-  const p=psyToday(), good=['no','no','no','si'];
-  document.querySelectorAll('.seg').forEach(seg=>{
-    const q=+seg.dataset.q;
-    seg.querySelectorAll('button').forEach(b=>{
-      b.className= p.ans[q]===b.dataset.v ? 'on '+(b.dataset.v===good[q]?'good':'bad') : '';
-    });
-  });
-  $('psyNote').textContent= p.ans.includes(null) ? 'Responde las 4 preguntas. Se reinician cada día.'
-    : psyOK() ? '✓ Mente lista. Disciplina sobre impulso.' : '🔴 Hoy no es tu día para operar. El mercado abre mañana también.';
-}
-
-/* ---------- calculadora ---------- */
-function calc(){
-  try{
-    const num=id=>{const v=String($(id).value||'').trim().replace(',','.');return v?parseFloat(v):NaN;};
-    const bal=num('cBal'), rp=+$('cRisk').value, e=num('cEntry'), sl=num('cSl'), tp=num('cTp');
-    const msg=t=>{$('calcMsg').textContent=t;};
-    S.lastCalc=null;
-    $('rLot').textContent='—';$('rRisk').textContent='—';$('rGain').textContent='—';$('rRR').textContent='—';
-    if(!bal||bal<=0){msg('Falta el balance.');renderChecks();return;}
-    if(isNaN(e)){msg('Escribe el precio de entrada (ej. 1.08500).');renderChecks();return;}
-    if(isNaN(sl)){msg('Escribe el Stop Loss.');renderChecks();return;}
-    const slPips=Math.abs(e-sl)*10000;
-    if(slPips<0.5){msg('Entrada y SL casi iguales ('+slPips.toFixed(1)+' pips): revisa los precios.');renderChecks();return;}
-    if(slPips>500){msg('⚠ SL de '+slPips.toFixed(0)+' pips: parece un dedazo en la entrada o el SL. Revisa los precios.');renderChecks();return;}
-    const riskUsd=bal*rp/100, lot=riskUsd/(slPips*10);
-    const rr=(!isNaN(tp)&&tp)?Math.abs(tp-e)/Math.abs(e-sl):null;
-    S.lastCalc={riskPct:rp,rr,lot,riskUsd,gain:rr?riskUsd*rr:null};
-    $('rLot').textContent=lot.toFixed(2);
-    $('rRisk').textContent='$'+riskUsd.toFixed(0)+' ('+rp+'%)';
-    $('rGain').textContent=S.lastCalc.gain!=null?'$'+S.lastCalc.gain.toFixed(0):'—';
-    $('rRR').textContent=rr?'1:'+rr.toFixed(1):'—';
-    msg(rr&&rr<2?'⚠ RR 1:'+rr.toFixed(1)+' — tu regla exige mínimo 1:2.':'✓ SL de '+slPips.toFixed(1)+' pips. Cálculo en vivo.');
-    $('jRisk')&&($('jRisk').value=riskUsd.toFixed(0));
-    renderChecks();
-  }catch(err){ $('calcMsg').textContent='Error: '+err.message; }
-}
-['cBal','cRisk','cEntry','cSl','cTp'].forEach(id=>{$(id).oninput=calc;$(id).onchange=calc;});
 
 /* ---------- diario / FTMO / stats ---------- */
 function jstats(){
@@ -568,7 +601,7 @@ function renderJournal(){
 function buildSetup(bias){
   const T=S.trend; if(!T||!bias) return null;
   const m15=T.M15, px=T.M15.px, a=m15.atr;
-  const fmt=x=>x.toFixed(5);
+  const fmt=x=>x.toFixed(cfg().dec);
   let entry, sl, reasons=[];
   if(bias==='ALCISTA'){
     const sw=lastSwing(m15.c,'lo');
@@ -587,13 +620,17 @@ function buildSetup(bias){
   }
   const zn=(T.zones||[]).find(z=>z.near);
   if(zn) reasons.push(`Confluencia: precio en ${zn.name.toLowerCase()} (${zn.price.toFixed(5)})`);
+  const sg=stochSignal();
+  if(sg) reasons.push(`Estocástico: ${sg.txt}`);
+  if(T.ob) reasons.push(`Precio en order block ${T.ob.type==='bull'?'alcista':'bajista'} (${T.ob.bot.toFixed(5)}–${T.ob.top.toFixed(5)})`);
   if(T.vol&&!T.vol.ok) reasons.push(`⚠ Volatilidad ${T.vol.state}: ${T.vol.why}`);
   const risk=Math.abs(entry-sl);
   const tp2= bias==='ALCISTA'? entry+2*risk : entry-2*risk;
   const tp3= bias==='ALCISTA'? entry+3*risk : entry-3*risk;
-  const slPips=risk*10000;
+  const PF=cfg().pipFactor, PV=cfg().pipValue, DEC=cfg().dec;
+  const slPips=risk*PF;
   const bal=ACC+jstats().pnl, rp=+($('cRisk').value||0.5);
-  const lot=(bal*rp/100)/(slPips*10);
+  const lot=(bal*rp/100)/(slPips*PV);
   return {side:bias==='ALCISTA'?'COMPRA':'VENTA', buy:bias==='ALCISTA',
     entry:fmt(entry), sl:fmt(sl), tp2:fmt(tp2), tp3:fmt(tp3),
     slPips:slPips.toFixed(1), lot:lot.toFixed(2), reasons};
@@ -608,8 +645,12 @@ function renderSetup(){
   }
   const s=buildSetup(bias); if(!s){box.innerHTML='<div class="empty">No se pudo calcular el setup. Vuelve a analizar.</div>';return;}
   const m5 = T.M5.t===bias;
-  box.innerHTML=`<div class="setup ${s.buy?'buy':'sell'}">
-    <div class="dir ${s.buy?'s-up':'s-dn'}">${s.buy?'▲ COMPRA':'▼ VENTA'} EUR/USD</div>
+  const R=strongSignal(); const score=R?R.score:0;
+  const power = score>=5?'🔥 SETUP MÁS PODEROSO (5/5)':score===4?'✅ SETUP SÓLIDO (4/5)':score===3?'⚪ SETUP NORMAL (3/5)':'🔴 SETUP DÉBIL ('+score+'/5)';
+  const pcls = score>=5?'s5':score===4?'s4':'';
+  box.innerHTML=`<div class="setup ${s.buy?'buy':'sell'} ${pcls}">
+    <div style="font-family:var(--disp);font-weight:800;letter-spacing:.06em;font-size:13px;color:${score>=5?'var(--gold)':'var(--dim)'};margin-bottom:6px">${power}</div>
+    <div class="dir ${s.buy?'s-up':'s-dn'}">${s.buy?'▲ COMPRA':'▼ VENTA'} ${SYMBOL}</div>
     <div class="lv">
       <div class="c"><div class="l">Precio de entrada</div><div class="v">${s.entry}</div></div>
       <div class="c"><div class="l">Lote a operar</div><div class="v gold">${s.lot}</div></div>
@@ -625,7 +666,7 @@ function renderSetup(){
 function renderChecks(){
   const T=S.trend, st=jstats();
   const h=new Date().getUTCHours();
-  const session=h>=7&&h<21;
+  const session=true; // operar cualquier sesión
   const bias=T&&T.H4.t!=='NEUTRAL'&&T.H4.t===T.M15.t?T.H4.t:null;
   const m5ok=!!(bias&&T.M5.t===bias);
   const zoneAuto=!!(T&&T.zones&&T.zones.some(z=>z.near));
@@ -637,12 +678,13 @@ function renderChecks(){
     ['Precio en zona importante', $('ckZone').checked||zoneAuto, zoneAuto?'detectada automáticamente':'confírmalo tú'],
     ['Confirmación M5', m5ok, T?T.M5.t:'—'],
     ['Volatilidad sana', !!(T&&T.vol&&T.vol.ok), T&&T.vol?T.vol.state:'—'],
+    ['Gatillo estocástico a favor', !!(stochSignal()&&stochSignal().fire), T&&T.stoch?('%K '+T.stoch.k.toFixed(0)):'—'],
+    ['Order block a favor', !!(strongSignal()&&strongSignal().layers[2].on), T&&T.ob?T.ob.type:'—'],
     ['Riesgo ≤ 0.5%', riskOk, S.lastCalc?S.lastCalc.riskPct+'%':'usa la calculadora'],
     ['Relación mínima 1:2', rrOk, S.lastCalc&&S.lastCalc.rr?'1:'+S.lastCalc.rr.toFixed(1):'define TP'],
     ['Sin noticias importantes (2h)', $('ckNews').checked, 'revísalo en tu calendario'],
-    ['Sesión Londres / Nueva York', session, h+':00 UTC'],
+    ['Sesión activa (cualquier hora)', session, h+':00 UTC'],
     ['Menos de 2 pérdidas hoy', st.lossToday<2, st.lossToday+' pérdidas hoy'],
-    ['Mente lista (dashboard psicológico)', psyOK(), '']
   ];
   $('checks').innerHTML=items.map(([t,ok,why])=>`
     <div class="check ${ok?'ok':'no'}"><span class="box">${ok?'✓':'✕'}</span><span>${t}</span><span class="why">${why}</span></div>`).join('');
@@ -651,12 +693,16 @@ function renderChecks(){
   if(all){v.className='verdict go';v.textContent='🟢 OPERACIÓN VÁLIDA';}
   else{v.className='verdict stop';v.textContent='🔴 NO OPERAR';}
 }
-function renderAll(){renderTrend();renderVolZones();renderPsy();renderFTMO();renderStats();renderJournal();renderChecks();}
+function renderAll(){renderTrend();renderVolZones();renderStoch();renderStrong();renderFTMO();renderStats();renderJournal();renderChecks();}
 
 /* ---------- eventos ---------- */
+$('symSel').value=SYMBOL;
+$('symSel').onchange=()=>{ SYMBOL=$('symSel').value; store.set('sn_symbol',SYMBOL); S.trend=null;
+  $('mktMeta').textContent='instrumento: '+SYMBOL+' · pulsa Analizar';
+  ['strongBox','setupBox','volBox','stochBox','zonesBox'].forEach(id=>$(id)&&($(id).innerHTML=''));
+  renderAll(); };
 $('btnScan').onclick=scan;
 $('btnSetup').onclick=renderSetup;
-$('btnCalc').onclick=calc;
 $('ckZone').onchange=renderChecks;
 $('ckNews').onchange=renderChecks;
 $('btnAdd').onclick=()=>{
