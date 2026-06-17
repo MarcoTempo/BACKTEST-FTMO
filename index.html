@@ -200,6 +200,13 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
   <div id="strongBox"><div class="empty">Pulsa Analizar. Aquí se gradúa la señal según cuántas capas de tu estrategia coinciden.</div></div>
 </section>
 
+<!-- GRÁFICO ANOTADO -->
+<section class="panel span2" id="chartPanel" style="display:none">
+  <div class="ph"><h2>Gráfico anotado</h2><span class="s" id="chartMeta">M15 · zonas · OB · entrada/SL/TP</span></div>
+  <canvas id="chartC" width="840" height="340"></canvas>
+  <div id="chartLegend" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:10px;color:var(--dim)"></div>
+</section>
+
 <!-- SETUP SUGERIDO -->
 <section class="panel span2">
   <div class="ph"><h2>Setup sugerido</h2><span class="s">entrada · SL · TP · lote — para que TÚ valides</span></div>
@@ -635,6 +642,69 @@ function buildSetup(bias){
     entry:fmt(entry), sl:fmt(sl), tp2:fmt(tp2), tp3:fmt(tp3),
     slPips:slPips.toFixed(1), lot:lot.toFixed(2), reasons};
 }
+function drawChart(){
+  const T=S.trend; const panel=$('chartPanel'), cv=$('chartC');
+  if(!T||!T.M15||!T.M15.c){ panel.style.display='none'; return; }
+  panel.style.display='';
+  const all=T.M15.c.slice(0,-1);            // velas cerradas
+  const c=all.slice(-80);                    // últimas 80 para que se vean
+  const cx=cv.getContext('2d'); const W=cv.width,H=cv.height; cx.clearRect(0,0,W,H);
+  const padL=8,padR=86,padT=12,padB=14;
+  const DEC=cfg().dec, PF=cfg().pipFactor;
+  // rango de precio incluyendo niveles del setup
+  let lo=Math.min(...c.map(b=>b.l)), hi=Math.max(...c.map(b=>b.h));
+  const bias=T.H4.t!=='NEUTRAL'&&T.H4.t===T.M15.t?T.H4.t:null;
+  const setup=bias?buildSetup(bias):null;
+  const extra=[];
+  if(setup){extra.push(+setup.entry,+setup.sl,+setup.tp2,+setup.tp3);}
+  (T.zones||[]).slice(0,4).forEach(z=>extra.push(z.price));
+  if(T.ob){extra.push(T.ob.top,T.ob.bot);}
+  extra.forEach(v=>{ if(v<lo)lo=v; if(v>hi)hi=v; });
+  const pad=(hi-lo)*0.06||0.001; lo-=pad; hi+=pad;
+  const X=i=>padL+i/(c.length-1)*(W-padL-padR);
+  const Y=v=>padT+(1-(v-lo)/((hi-lo)||1))*(H-padT-padB);
+  const cw=Math.max(2,(W-padL-padR)/c.length*0.6);
+  // línea de precio derecha
+  cx.font='9px monospace';
+  // zonas clave (líneas punteadas grises/doradas)
+  (T.zones||[]).slice(0,4).forEach(z=>{
+    cx.strokeStyle=z.near?'rgba(212,175,55,.7)':'rgba(148,148,156,.35)';
+    cx.setLineDash([3,3]);cx.beginPath();cx.moveTo(padL,Y(z.price));cx.lineTo(W-padR,Y(z.price));cx.stroke();cx.setLineDash([]);
+    cx.fillStyle=z.near?'#D4AF37':'#94949C';cx.fillText(z.price.toFixed(DEC),W-padR+3,Y(z.price)+3);
+  });
+  // order block (rectángulo sombreado)
+  if(T.ob){
+    const y1=Y(T.ob.top),y2=Y(T.ob.bot);
+    cx.fillStyle=T.ob.type==='bull'?'rgba(43,213,118,.12)':'rgba(255,77,94,.12)';
+    cx.fillRect(padL,Math.min(y1,y2),W-padL-padR,Math.abs(y2-y1));
+    cx.fillStyle=T.ob.type==='bull'?'#2BD576':'#FF4D5E';cx.fillText('OB',padL+2,Math.min(y1,y2)+9);
+  }
+  // velas
+  c.forEach((b,i)=>{
+    const up=b.c>=b.o, col=up?'#2BD576':'#FF4D5E';
+    cx.strokeStyle=col;cx.fillStyle=col;
+    cx.beginPath();cx.moveTo(X(i),Y(b.h));cx.lineTo(X(i),Y(b.l));cx.stroke();
+    const yo=Y(b.o),yc=Y(b.c);
+    cx.fillRect(X(i)-cw/2,Math.min(yo,yc),cw,Math.max(1,Math.abs(yc-yo)));
+  });
+  // niveles del setup
+  if(setup){
+    const lv=[['Entrada',+setup.entry,'#D4AF37'],['SL',+setup.sl,'#FF4D5E'],['TP1:2',+setup.tp2,'#2BD576'],['TP1:3',+setup.tp3,'#2BD576']];
+    lv.forEach(([n,v,col])=>{
+      cx.strokeStyle=col;cx.lineWidth=1.2;cx.beginPath();cx.moveTo(padL,Y(v));cx.lineTo(W-padR,Y(v));cx.stroke();
+      cx.fillStyle=col;cx.fillText(n+' '+v.toFixed(DEC),W-padR+3,Y(v)+3);
+    });
+    cx.lineWidth=1;
+  }
+  $('chartMeta').textContent=SYMBOL+' · M15 · '+(setup?(setup.buy?'COMPRA':'VENTA'):'sin setup');
+  $('chartLegend').innerHTML=[
+    '<span style="color:#D4AF37">━ Entrada</span>',
+    '<span style="color:#FF4D5E">━ SL</span>',
+    '<span style="color:#2BD576">━ TP 1:2 / 1:3</span>',
+    '<span style="color:#D4AF37">┄ Zona clave</span>',
+    '<span style="color:#2BD576">▭ OB</span>'
+  ].join('');
+}
 function renderSetup(){
   const box=$('setupBox'), T=S.trend;
   if(!T){ box.innerHTML='<div class="empty">Primero pulsa <b style="color:var(--gold)">Analizar</b> arriba para leer el mercado, luego genera el setup.</div>'; return; }
@@ -693,7 +763,7 @@ function renderChecks(){
   if(all){v.className='verdict go';v.textContent='🟢 OPERACIÓN VÁLIDA';}
   else{v.className='verdict stop';v.textContent='🔴 NO OPERAR';}
 }
-function renderAll(){renderTrend();renderVolZones();renderStoch();renderStrong();renderFTMO();renderStats();renderJournal();renderChecks();}
+function renderAll(){renderTrend();renderVolZones();renderStoch();renderStrong();drawChart();renderFTMO();renderStats();renderJournal();renderChecks();}
 
 /* ---------- eventos ---------- */
 $('symSel').value=SYMBOL;
