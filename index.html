@@ -203,7 +203,7 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
 <!-- GRÁFICO ANOTADO -->
 <section class="panel span2" id="chartPanel" style="display:none">
   <div class="ph"><h2>Gráfico anotado</h2><span class="s" id="chartMeta">M15 · zonas · OB · entrada/SL/TP</span></div>
-  <canvas id="chartC" width="900" height="520" style="height:auto;aspect-ratio:900/520"></canvas>
+  <canvas id="chartC" width="760" height="1180" style="height:auto;aspect-ratio:760/1180"></canvas>
   <div id="chartLegend" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:10px;color:var(--dim)"></div>
 </section>
 
@@ -647,10 +647,10 @@ function drawChart(){
   if(!T||!T.M15||!T.M15.c){ panel.style.display='none'; return; }
   panel.style.display='';
   const all=T.M15.c.slice(0,-1);            // velas cerradas
-  const c=all.slice(-140);                   // más velas para mejor contexto
+  const c=all.slice(-60);                    // menos velas = cada una más grande/visible
   const cx=cv.getContext('2d'); const W=cv.width,H=cv.height; cx.clearRect(0,0,W,H);
   const padL=8,padR=92,padT=14;
-  const stochH=92, gap=10;                       // panel inferior para el estocástico
+  const stochH=200, gap=14;                      // panel inferior para el estocástico
   const padB=14+stochH+gap;
   const priceBot=H-padB;
   const DEC=cfg().dec, PF=cfg().pipFactor;
@@ -666,9 +666,9 @@ function drawChart(){
   const pad=(hi-lo)*0.06||0.001; lo-=pad; hi+=pad;
   const X=i=>padL+i/(c.length-1)*(W-padL-padR);
   const Y=v=>padT+(1-(v-lo)/((hi-lo)||1))*(H-padT-padB);
-  const cw=Math.max(2.5,(W-padL-padR)/c.length*0.62);
+  const cw=Math.max(5,(W-padL-padR)/c.length*0.68);
   // línea de precio derecha
-  cx.font='9px monospace';
+  cx.font='13px monospace';
   // zonas clave (líneas punteadas grises/doradas)
   (T.zones||[]).slice(0,4).forEach(z=>{
     cx.strokeStyle=z.near?'rgba(212,175,55,.7)':'rgba(148,148,156,.35)';
@@ -685,8 +685,8 @@ function drawChart(){
   // velas
   c.forEach((b,i)=>{
     const up=b.c>=b.o, col=up?'#2BD576':'#FF4D5E';
-    cx.strokeStyle=col;cx.fillStyle=col;
-    cx.beginPath();cx.moveTo(X(i),Y(b.h));cx.lineTo(X(i),Y(b.l));cx.stroke();
+    cx.strokeStyle=col;cx.fillStyle=col;cx.lineWidth=1.4;
+    cx.beginPath();cx.moveTo(X(i),Y(b.h));cx.lineTo(X(i),Y(b.l));cx.stroke();cx.lineWidth=1;
     const yo=Y(b.o),yc=Y(b.c);
     cx.fillRect(X(i)-cw/2,Math.min(yo,yc),cw,Math.max(1,Math.abs(yc-yo)));
   });
