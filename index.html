@@ -203,7 +203,7 @@ footer{max-width:880px;margin:0 auto;padding:10px 18px 40px;color:var(--dim);fon
 <!-- GRÁFICO ANOTADO -->
 <section class="panel span2" id="chartPanel" style="display:none">
   <div class="ph"><h2>Gráfico anotado</h2><span class="s" id="chartMeta">M15 · zonas · OB · entrada/SL/TP</span></div>
-  <canvas id="chartC" width="840" height="340"></canvas>
+  <canvas id="chartC" width="900" height="520" style="height:auto;aspect-ratio:900/520"></canvas>
   <div id="chartLegend" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:10px;color:var(--dim)"></div>
 </section>
 
@@ -647,9 +647,12 @@ function drawChart(){
   if(!T||!T.M15||!T.M15.c){ panel.style.display='none'; return; }
   panel.style.display='';
   const all=T.M15.c.slice(0,-1);            // velas cerradas
-  const c=all.slice(-80);                    // últimas 80 para que se vean
+  const c=all.slice(-140);                   // más velas para mejor contexto
   const cx=cv.getContext('2d'); const W=cv.width,H=cv.height; cx.clearRect(0,0,W,H);
-  const padL=8,padR=86,padT=12,padB=14;
+  const padL=8,padR=92,padT=14;
+  const stochH=92, gap=10;                       // panel inferior para el estocástico
+  const padB=14+stochH+gap;
+  const priceBot=H-padB;
   const DEC=cfg().dec, PF=cfg().pipFactor;
   // rango de precio incluyendo niveles del setup
   let lo=Math.min(...c.map(b=>b.l)), hi=Math.max(...c.map(b=>b.h));
@@ -663,7 +666,7 @@ function drawChart(){
   const pad=(hi-lo)*0.06||0.001; lo-=pad; hi+=pad;
   const X=i=>padL+i/(c.length-1)*(W-padL-padR);
   const Y=v=>padT+(1-(v-lo)/((hi-lo)||1))*(H-padT-padB);
-  const cw=Math.max(2,(W-padL-padR)/c.length*0.6);
+  const cw=Math.max(2.5,(W-padL-padR)/c.length*0.62);
   // línea de precio derecha
   cx.font='9px monospace';
   // zonas clave (líneas punteadas grises/doradas)
@@ -695,6 +698,25 @@ function drawChart(){
       cx.fillStyle=col;cx.fillText(n+' '+v.toFixed(DEC),W-padR+3,Y(v)+3);
     });
     cx.lineWidth=1;
+  }
+  // ----- sub-panel estocástico (M5) estilo MT5 -----
+  const sy0=H-stochH, sy1=H-2;
+  const SY=v=>sy0+(1-v/100)*(sy1-sy0);
+  cx.strokeStyle='#222226';cx.strokeRect(padL,sy0,W-padL-padR,stochH);
+  [20,50,80].forEach(lvl=>{ cx.strokeStyle=lvl===50?'rgba(148,148,156,.2)':'rgba(212,175,55,.25)';cx.setLineDash(lvl===50?[1,3]:[3,3]);cx.beginPath();cx.moveTo(padL,SY(lvl));cx.lineTo(W-padR,SY(lvl));cx.stroke();cx.setLineDash([]);cx.fillStyle='#94949C';cx.fillText(lvl,W-padR+3,SY(lvl)+3); });
+  // recalcular %K %D sobre la ventana visible de M5 si está disponible
+  const m5=T.M5&&T.M5.c?T.M5.c.slice(0,-1):null;
+  if(m5){
+    const kRaw=[];
+    for(let i=13;i<m5.length;i++){let hh=-1e9,ll=1e9;for(let j=i-13;j<=i;j++){hh=Math.max(hh,m5[j].h);ll=Math.min(ll,m5[j].l);}kRaw.push(hh===ll?50:(m5[i].c-ll)/(hh-ll)*100);}
+    const sma=(a,p)=>{const o=[];for(let i=p-1;i<a.length;i++){let s=0;for(let j=i-p+1;j<=i;j++)s+=a[j];o.push(s/p);}return o;};
+    const K=sma(kRaw,3), D=sma(K,3);
+    const n=Math.min(K.length,D.length,120); const Kv=K.slice(-n),Dv=D.slice(-n);
+    const SX=i=>padL+i/(n-1)*(W-padL-padR);
+    cx.lineWidth=1.3;cx.strokeStyle='#2BD576';cx.beginPath();Kv.forEach((v,i)=>i?cx.lineTo(SX(i),SY(v)):cx.moveTo(SX(i),SY(v)));cx.stroke();
+    cx.strokeStyle='#FF4D5E';cx.beginPath();Dv.forEach((v,i)=>i?cx.lineTo(SX(i),SY(v)):cx.moveTo(SX(i),SY(v)));cx.stroke();
+    cx.lineWidth=1;
+    cx.fillStyle='#94949C';cx.fillText('Stoch 14,3,3  %K '+Kv.at(-1).toFixed(0)+'  %D '+Dv.at(-1).toFixed(0),padL+2,sy0+11);
   }
   $('chartMeta').textContent=SYMBOL+' · M15 · '+(setup?(setup.buy?'COMPRA':'VENTA'):'sin setup');
   $('chartLegend').innerHTML=[
