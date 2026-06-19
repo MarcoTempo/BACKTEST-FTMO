@@ -430,7 +430,29 @@ function keyZones(c, px){
   const R=cfg().round, PF=cfg().pipFactor;
   const base=Math.round(px/R)*R;
   [base-R, base, base+R].forEach(p=>{ if(p>0) z.push({name:'Número redondo', price:p}); });
-  return z.map(zz=>({...zz, pips:(zz.price-px)*PF, near:Math.abs(zz.price-px)<a}))
+  // --- Puntos Pivote clásicos (BabyPips 8º grado): usa el día previo ---
+  if(c.length>=2*day){
+    const yest=c.slice(-2*day,-day);
+    const H=Math.max(...yest.map(b=>b.h)), L=Math.min(...yest.map(b=>b.l)), C=yest.at(-1).c;
+    const P=(H+L+C)/3;
+    z.push({name:'Pivote (P)', price:P});
+    z.push({name:'Resistencia R1', price:2*P-L});
+    z.push({name:'Soporte S1', price:2*P-H});
+    z.push({name:'Resistencia R2', price:P+(H-L)});
+    z.push({name:'Soporte S2', price:P-(H-L)});
+  }
+  // --- Retroceso Fibonacci (BabyPips 3º grado): sobre el último swing relevante ---
+  if(c.length>=40){
+    const seg=c.slice(-40);
+    const hi=Math.max(...seg.map(b=>b.h)), lo=Math.min(...seg.map(b=>b.l));
+    const rng=hi-lo;
+    if(rng>0){
+      // en tendencia alcista el retroceso se mide desde el alto; usamos ambos sentidos como zonas
+      [['Fib 38.2%',hi-rng*0.382],['Fib 50%',hi-rng*0.5],['Fib 61.8%',hi-rng*0.618]].forEach(([n,pp])=>z.push({name:n,price:pp}));
+    }
+  }
+  const strong=n=>/Pivote|Resistencia|Soporte|Fib|día previo/i.test(n);
+  return z.map(zz=>({...zz, pips:(zz.price-px)*PF, near:Math.abs(zz.price-px)<a, strong:strong(zz.name)}))
           .sort((x,y)=>Math.abs(x.pips)-Math.abs(y.pips));
 }
 /* ---------- régimen de volatilidad ---------- */
@@ -454,7 +476,7 @@ function strongSignal(){
     {name:'Dirección H4+M15', on:!!bias},
     {name:'Volatilidad sana', on:!!(T.vol&&T.vol.ok)},
     {name:'Order block', on:!!(T.ob && ((wantBull&&T.ob.type==='bull')||(!wantBull&&bias&&T.ob.type==='bear')))},
-    {name:'Zona clave', on:!!(T.zones&&T.zones.some(z=>z.near))},
+    {name:'Zona clave (pivote/fib)', on:!!(T.zones&&T.zones.some(z=>z.near&&z.strong))},
     {name:'Gatillo estocástico', on:!!(sg&&sg.fire)}
   ];
   const score=layers.filter(l=>l.on).length;
@@ -504,9 +526,9 @@ function renderVolZones(){
   const v=T.vol;
   const col=v.state==='NORMAL'?'s-up':'s-dn';
   $('volBox').innerHTML=`<div class="volcard"><div><div class="zlbl">Volatilidad (ATR M15)</div><span class="st ${col}">${v.state}</span> · ${v.atrPips} pips</div><div style="text-align:right;color:var(--dim);max-width:48%">${v.why}</div></div>`;
-  const zs=(T.zones||[]).slice(0,5);
+  const zs=(T.zones||[]).slice(0,7);
   $('zonesBox').innerHTML='<div class="zlbl">Zonas clave cercanas</div>'+ (zs.length? zs.map(z=>`
-    <div class="zone ${z.near?'near':''}"><span class="zn">${z.name}${z.near?' · EN ZONA':''}</span><span class="zp">${z.price.toFixed(5)}</span><span class="zd">${z.pips>=0?'+':''}${z.pips.toFixed(0)} pips</span></div>`).join('') : '<div class="empty">—</div>');
+    <div class="zone ${z.near?'near':''}"><span class="zn">${z.strong?'★ ':''}${z.name}${z.near?' · EN ZONA':''}</span><span class="zp">${z.price.toFixed(5)}</span><span class="zd">${z.pips>=0?'+':''}${z.pips.toFixed(0)} pips</span></div>`).join('') : '<div class="empty">—</div>');
 }
 function renderTrend(){
   const T=S.trend;
@@ -625,8 +647,8 @@ function buildSetup(bias){
       sw!=null?`SL sobre el último máximo estructural M15`:`SL a 1.5× ATR sobre el precio`,
       `M5 ${T.M5.t==='BAJISTA'?'confirma':'aún no confirma'} el momentum`];
   }
-  const zn=(T.zones||[]).find(z=>z.near);
-  if(zn) reasons.push(`Confluencia: precio en ${zn.name.toLowerCase()} (${zn.price.toFixed(5)})`);
+  const zn=(T.zones||[]).find(z=>z.near&&z.strong)||(T.zones||[]).find(z=>z.near);
+  if(zn) reasons.push(`Confluencia: precio en ${zn.name.toLowerCase()} (${zn.price.toFixed(cfg().dec)})`);
   const sg=stochSignal();
   if(sg) reasons.push(`Estocástico: ${sg.txt}`);
   if(T.ob) reasons.push(`Precio en order block ${T.ob.type==='bull'?'alcista':'bajista'} (${T.ob.bot.toFixed(5)}–${T.ob.top.toFixed(5)})`);
@@ -660,7 +682,7 @@ function drawChart(){
   const setup=bias?buildSetup(bias):null;
   const extra=[];
   if(setup){extra.push(+setup.entry,+setup.sl,+setup.tp2,+setup.tp3);}
-  (T.zones||[]).slice(0,4).forEach(z=>extra.push(z.price));
+  (T.zones||[]).slice(0,6).forEach(z=>extra.push(z.price));
   if(T.ob){extra.push(T.ob.top,T.ob.bot);}
   extra.forEach(v=>{ if(v<lo)lo=v; if(v>hi)hi=v; });
   const pad=(hi-lo)*0.06||0.001; lo-=pad; hi+=pad;
@@ -670,8 +692,8 @@ function drawChart(){
   // línea de precio derecha
   cx.font='13px monospace';
   // zonas clave (líneas punteadas grises/doradas)
-  (T.zones||[]).slice(0,4).forEach(z=>{
-    cx.strokeStyle=z.near?'rgba(212,175,55,.7)':'rgba(148,148,156,.35)';
+  (T.zones||[]).slice(0,6).forEach(z=>{
+    cx.strokeStyle=z.near?'rgba(212,175,55,.8)':z.strong?'rgba(212,175,55,.4)':'rgba(148,148,156,.3)';
     cx.setLineDash([3,3]);cx.beginPath();cx.moveTo(padL,Y(z.price));cx.lineTo(W-padR,Y(z.price));cx.stroke();cx.setLineDash([]);
     cx.fillStyle=z.near?'#D4AF37':'#94949C';cx.fillText(z.price.toFixed(DEC),W-padR+3,Y(z.price)+3);
   });
