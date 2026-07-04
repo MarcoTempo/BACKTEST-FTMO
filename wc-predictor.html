@@ -113,12 +113,10 @@
 
   <div class="card" id="apiCard">
     <h2>Conexión de datos</h2>
-    <label>API Key de football-data.org</label>
-    <input type="password" id="apiKey" placeholder="Pega tu key aquí">
-    <div class="help">Gratis en <a href="https://www.football-data.org/client/register" target="_blank">football-data.org/client/register</a> — te llega por correo al instante, sin tarjeta. Incluye el Mundial gratis para siempre (10 llamadas/min). Sólo vive en esta sesión del navegador.</div>
+    <div class="help">Datos reales del Mundial 2026 vía football-data.org, conectados desde el servidor (sin exponer ninguna key en el navegador).</div>
     <button class="btn" id="loadFixturesBtn">Cargar próximos partidos</button>
     <div class="status" id="apiStatus"></div>
-    <div class="toggle-manual" id="manualToggle">¿No tienes API key? Ingresa datos manualmente →</div>
+    <div class="toggle-manual" id="manualToggle">¿Prefieres meter los datos tú mismo? Modo manual →</div>
   </div>
 
   <div class="card hidden" id="manualCard">
@@ -178,10 +176,8 @@
 </div>
 
 <script>
-const API_BASE = "https://api.football-data.org/v4";
-const WC_CODE = "WC"; // Código del Mundial en football-data.org
+const API_BASE = ""; // Ahora usamos nuestras propias funciones serverless en /api
 
-let apiKey = "";
 let fixturesData = [];
 let currentModel = null;
 
@@ -198,31 +194,20 @@ $("manualCalcBtn").addEventListener("click", runManualModel);
 async function apiFetch(path, params){
   const qs = params ? `?${new URLSearchParams(params)}` : "";
   const url = `${API_BASE}${path}${qs}`;
-  const res = await fetch(url, {
-    headers: {
-      "X-Auth-Token": apiKey
-    }
-  });
-  if(!res.ok) throw new Error(`Error API (${res.status})`);
+  const res = await fetch(url);
   const json = await res.json();
-  if(json.errorCode) throw new Error(json.message || "Error desconocido de la API");
+  if(!res.ok || json.error) throw new Error(json.error || `Error API (${res.status})`);
   return json;
 }
 
 async function loadFixtures(){
-  apiKey = $("apiKey").value.trim();
   const statusEl = $("apiStatus");
-  if(!apiKey){
-    statusEl.textContent = "Ingresa tu API key primero.";
-    statusEl.className = "status err";
-    return;
-  }
   statusEl.textContent = "Cargando partidos del Mundial 2026...";
   statusEl.className = "status";
   $("loadFixturesBtn").disabled = true;
 
   try {
-    const data = await apiFetch(`/competitions/${WC_CODE}/matches`, { status: "SCHEDULED" });
+    const data = await apiFetch("/api/matches");
     const matches = data.matches || [];
     if(!matches.length){
       statusEl.textContent = "No hay partidos próximos listados todavía.";
@@ -243,7 +228,7 @@ async function loadFixtures(){
     statusEl.textContent = `${matches.length} partidos cargados.`;
     statusEl.className = "status ok";
   } catch(err){
-    statusEl.textContent = "No se pudo conectar: " + err.message + ". Verifica tu key o usa el modo manual.";
+    statusEl.textContent = "No se pudo conectar: " + err.message + ". Usa el modo manual mientras se resuelve.";
     statusEl.className = "status err";
   } finally {
     $("loadFixturesBtn").disabled = false;
@@ -252,7 +237,7 @@ async function loadFixtures(){
 
 async function getTeamAverages(teamId){
   // Partidos finalizados recientes del equipo (Mundial + eliminatorias que cubra la API) para muestra real de forma
-  const data = await apiFetch(`/teams/${teamId}/matches`, { status: "FINISHED", limit: 15 });
+  const data = await apiFetch("/api/team-matches", { teamId });
   const matches = data.matches || [];
   let scored = 0, conceded = 0, played = 0;
   const form = [];
