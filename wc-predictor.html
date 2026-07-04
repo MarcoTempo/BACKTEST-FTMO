@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>WC26 Sniper — Predictor de Marcadores</title>
+<style>
+  :root{
+    --bg:#05060a;
+    --panel:rgba(255,255,255,0.04);
+    --panel-border:rgba(255,255,255,0.08);
+    --blue:#2e7dff;
+    --blue-glow:rgba(46,125,255,0.35);
+    --green:#22c55e;
+    --amber:#f5b942;
+    --red:#ef4444;
+    --text:#eef1f8;
+    --text-dim:#8b93a7;
+    --mono: 'SF Mono', 'Menlo', monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  body{padding-bottom:60px;}
+  .wrap{max-width:480px;margin:0 auto;padding:18px 16px;}
+
+  header{padding:22px 4px 18px;}
+  .eyebrow{font-size:11px;letter-spacing:2px;color:var(--blue);text-transform:uppercase;font-weight:600;}
+  h1{font-size:26px;margin:6px 0 4px;font-weight:800;letter-spacing:-0.5px;}
+  .sub{font-size:13px;color:var(--text-dim);line-height:1.5;}
+
+  .card{background:var(--panel);border:1px solid var(--panel-border);border-radius:16px;
+    padding:16px;margin-bottom:14px;backdrop-filter:blur(20px);}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);
+    margin:0 0 12px;font-weight:700;}
+
+  label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;font-weight:600;}
+  input,select{width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--panel-border);
+    color:var(--text);padding:11px 12px;border-radius:10px;font-size:14px;margin-bottom:12px;
+    -webkit-appearance:none;appearance:none;}
+  input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-glow);}
+  select{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%238b93a7'/></svg>");
+    background-repeat:no-repeat;background-position:right 14px center;}
+
+  .btn{display:block;width:100%;text-align:center;background:var(--blue);color:#fff;border:none;
+    padding:13px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;
+    box-shadow:0 4px 20px var(--blue-glow);}
+  .btn:active{transform:scale(0.98);}
+  .btn.secondary{background:rgba(255,255,255,0.06);color:var(--text);box-shadow:none;}
+  .btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+  .status{font-size:12px;color:var(--text-dim);text-align:center;margin-top:8px;min-height:16px;}
+  .status.err{color:var(--red);}
+  .status.ok{color:var(--green);}
+
+  .matchup{display:flex;align-items:center;justify-content:space-between;padding:10px 0;}
+  .team{flex:1;text-align:center;}
+  .team-name{font-size:15px;font-weight:700;}
+  .team-form{font-size:11px;color:var(--text-dim);margin-top:4px;}
+  .vs{font-size:11px;color:var(--text-dim);padding:0 10px;}
+
+  /* Heatmap — signature element */
+  .heatmap{display:grid;grid-template-columns:24px repeat(6,1fr);gap:3px;margin-top:10px;}
+  .hcell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:10px;border-radius:5px;font-weight:600;}
+  .hlabel{font-size:10px;color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
+  .axis-label{text-align:center;font-size:10px;color:var(--text-dim);margin-top:6px;letter-spacing:1px;}
+
+  .top-scores{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+  .score-row{display:flex;align-items:center;background:rgba(255,255,255,0.03);
+    border-radius:10px;padding:10px 12px;}
+  .score-rank{font-family:var(--mono);color:var(--blue);font-weight:700;width:22px;font-size:13px;}
+  .score-val{font-family:var(--mono);font-size:16px;font-weight:800;flex:1;}
+  .score-bar-wrap{flex:1;margin:0 10px;height:6px;background:rgba(255,255,255,0.06);
+    border-radius:3px;overflow:hidden;}
+  .score-bar{height:100%;background:linear-gradient(90deg,var(--blue),#5aa3ff);}
+  .score-pct{font-family:var(--mono);font-size:13px;font-weight:700;width:48px;text-align:right;}
+
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;}
+  .stat-box{background:rgba(255,255,255,0.03);border-radius:10px;padding:12px 8px;text-align:center;}
+  .stat-box .v{font-size:17px;font-weight:800;font-family:var(--mono);}
+  .stat-box .l{font-size:10px;color:var(--text-dim);margin-top:3px;text-transform:uppercase;letter-spacing:0.5px;}
+
+  .bet-card{border:1px solid var(--panel-border);border-radius:12px;padding:12px;margin-top:8px;
+    display:flex;justify-content:space-between;align-items:center;}
+  .bet-card .name{font-size:13px;font-weight:700;}
+  .bet-card .conf{font-size:11px;color:var(--text-dim);margin-top:2px;}
+  .conf-pill{font-family:var(--mono);font-size:12px;font-weight:800;padding:4px 10px;border-radius:20px;}
+  .conf-high{background:rgba(34,197,94,0.15);color:var(--green);}
+  .conf-mid{background:rgba(245,185,66,0.15);color:var(--amber);}
+  .conf-low{background:rgba(239,68,68,0.12);color:var(--red);}
+
+  .disclaimer{font-size:11px;color:var(--text-dim);line-height:1.6;padding:14px;
+    border:1px dashed var(--panel-border);border-radius:12px;margin-top:6px;}
+  .disclaimer b{color:var(--text);}
+
+  .toggle-manual{font-size:12px;color:var(--blue);text-align:center;margin-top:6px;cursor:pointer;
+    text-decoration:underline;}
+  .hidden{display:none;}
+  .help{font-size:11px;color:var(--text-dim);margin-top:-6px;margin-bottom:10px;line-height:1.5;}
+  a{color:var(--blue);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Mundial 2026 · Datos reales</div>
+    <h1>WC26 Score Sniper</h1>
+    <div class="sub">Distribución de probabilidad por marcador exacto, calculada con modelo de Poisson sobre estadísticas reales de cada selección. Para decidir apuestas en Playdoit con criterio, no con corazonadas.</div>
+  </header>
+
+  <div class="card" id="apiCard">
+    <h2>Conexión de datos</h2>
+    <label>API Key de API-Football (RapidAPI)</label>
+    <input type="password" id="apiKey" placeholder="Pega tu key aquí">
+    <div class="help">Gratis en <a href="https://rapidapi.com/api-sports/api/api-football" target="_blank">rapidapi.com/api-sports/api-football</a> (100 requests/día). La key sólo vive en esta sesión del navegador, no se guarda ni se envía a ningún lado más que a la API.</div>
+    <button class="btn" id="loadFixturesBtn">Cargar próximos partidos</button>
+    <div class="status" id="apiStatus"></div>
+    <div class="toggle-manual" id="manualToggle">¿No tienes API key? Ingresa datos manualmente →</div>
+  </div>
+
+  <div class="card hidden" id="manualCard">
+    <h2>Modo manual</h2>
+    <label>Selección Local</label>
+    <input type="text" id="mHomeName" placeholder="Ej. México">
+    <label>Goles promedio anotados (local)</label>
+    <input type="number" id="mHomeScored" step="0.1" placeholder="Ej. 1.8">
+    <label>Goles promedio recibidos (local)</label>
+    <input type="number" id="mHomeConceded" step="0.1" placeholder="Ej. 0.9">
+    <label>Selección Visitante</label>
+    <input type="text" id="mAwayName" placeholder="Ej. Argentina">
+    <label>Goles promedio anotados (visitante)</label>
+    <input type="number" id="mAwayScored" step="0.1" placeholder="Ej. 2.1">
+    <label>Goles promedio recibidos (visitante)</label>
+    <input type="number" id="mAwayConceded" step="0.1" placeholder="Ej. 0.8">
+    <button class="btn" id="manualCalcBtn">Calcular predicción</button>
+  </div>
+
+  <div class="card hidden" id="fixturesCard">
+    <h2>Selecciona partido</h2>
+    <select id="fixtureSelect"></select>
+    <button class="btn" id="analyzeBtn">Analizar enfrentamiento</button>
+    <div class="status" id="fixtureStatus"></div>
+  </div>
+
+  <div id="resultsWrap" class="hidden">
+
+    <div class="card">
+      <h2>Enfrentamiento</h2>
+      <div class="matchup" id="matchupDisplay"></div>
+      <div class="stat-grid" id="statGrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Mapa de calor — marcador exacto</h2>
+      <div id="heatmapWrap"></div>
+      <div class="axis-label">Filas = goles local · Columnas = goles visitante</div>
+    </div>
+
+    <div class="card">
+      <h2>Top 5 marcadores más probables</h2>
+      <div class="top-scores" id="topScores"></div>
+    </div>
+
+    <div class="card">
+      <h2>Mercados sugeridos</h2>
+      <div id="marketsList"></div>
+    </div>
+
+  </div>
+
+  <div class="disclaimer">
+    <b>Nota honesta:</b> ningún modelo predice marcadores exactos con certeza — ni los sistemas profesionales superan ~10-12% de acierto en ese mercado. Estos porcentajes son probabilidades relativas basadas en datos reales, no garantías. Apostar conlleva riesgo real de pérdida de dinero. Usa esto como apoyo para identificar valor, no como una señal infalible, y define un límite de pérdida antes de abrir Playdoit.
+  </div>
+
+</div>
+
+<script>
+const API_HOST = "api-football-v1.p.rapidapi.com";
+const WC_LEAGUE_ID = 1; // World Cup en API-Football
+const SEASON = 2026;
+
+let apiKey = "";
+let fixturesData = [];
+let currentModel = null;
+
+const $ = id => document.getElementById(id);
+
+$("manualToggle").addEventListener("click", () => {
+  $("manualCard").classList.toggle("hidden");
+});
+
+$("loadFixturesBtn").addEventListener("click", loadFixtures);
+$("analyzeBtn").addEventListener("click", analyzeSelectedFixture);
+$("manualCalcBtn").addEventListener("click", runManualModel);
+
+async function apiFetch(path, params){
+  const url = `https://${API_HOST}/v3${path}?${new URLSearchParams(params)}`;
+  const res = await fetch(url, {
+    headers: {
+      "X-RapidAPI-Key": apiKey,
+      "X-RapidAPI-Host": API_HOST
+    }
+  });
+  if(!res.ok) throw new Error(`Error API (${res.status})`);
+  const json = await res.json();
+  if(json.errors && Object.keys(json.errors).length) throw new Error(JSON.stringify(json.errors));
+  return json.response;
+}
+
+async function loadFixtures(){
+  apiKey = $("apiKey").value.trim();
+  const statusEl = $("apiStatus");
+  if(!apiKey){
+    statusEl.textContent = "Ingresa tu API key primero.";
+    statusEl.className = "status err";
+    return;
+  }
+  statusEl.textContent = "Cargando partidos del Mundial 2026...";
+  statusEl.className = "status";
+  $("loadFixturesBtn").disabled = true;
+
+  try {
+    const now = new Date().toISOString().slice(0,10);
+    const future = new Date(Date.now() + 1000*60*60*24*30).toISOString().slice(0,10);
+    const data = await apiFetch("/fixtures", {
+      league: WC_LEAGUE_ID, season: SEASON, from: now, to: future
+    });
+    if(!data.length){
+      statusEl.textContent = "No hay partidos próximos listados todavía para este rango de fechas.";
+      statusEl.className = "status err";
+      return;
+    }
+    fixturesData = data;
+    const sel = $("fixtureSelect");
+    sel.innerHTML = "";
+    data.forEach((f, i) => {
+      const opt = document.createElement("option");
+      const date = new Date(f.fixture.date).toLocaleDateString("es-MX",{day:"2-digit",month:"short"});
+      opt.value = i;
+      opt.textContent = `${f.teams.home.name} vs ${f.teams.away.name} · ${date}`;
+      sel.appendChild(opt);
+    });
+    $("fixturesCard").classList.remove("hidden");
+    statusEl.textContent = `${data.length} partidos cargados.`;
+    statusEl.className = "status ok";
+  } catch(err){
+    statusEl.textContent = "No se pudo conectar: " + err.message + ". Verifica tu key o usa el modo manual.";
+    statusEl.className = "status err";
+  } finally {
+    $("loadFixturesBtn").disabled = false;
+  }
+}
+
+async function getTeamAverages(teamId){
+  // Últimos 15 partidos jugados por el equipo, cualquier competencia, para muestra real de forma
+  const fixtures = await apiFetch("/fixtures", { team: teamId, last: 15 });
+  let scored = 0, conceded = 0, played = 0;
+  const form = [];
+  fixtures.forEach(f => {
+    const isHome = f.teams.home.id === teamId;
+    const gf = isHome ? f.goals.home : f.goals.away;
+    const ga = isHome ? f.goals.away : f.goals.home;
+    if(gf === null || ga === null) return;
+    scored += gf; conceded += ga; played++;
+    if(gf > ga) form.push("W"); else if(gf === ga) form.push("D"); else form.push("L");
+  });
+  if(played === 0) return { avgScored: 1.2, avgConceded: 1.2, form: [] };
+  return {
+    avgScored: scored/played,
+    avgConceded: conceded/played,
+    form: form.slice(0,5)
+  };
+}
+
+async function analyzeSelectedFixture(){
+  const idx = parseInt($("fixtureSelect").value);
+  const fixture = fixturesData[idx];
+  const statusEl = $("fixtureStatus");
+  statusEl.textContent = "Analizando estadísticas reales de ambos equipos...";
+  statusEl.className = "status";
+  $("analyzeBtn").disabled = true;
+
+  try {
+    const [homeStats, awayStats] = await Promise.all([
+      getTeamAverages(fixture.teams.home.id),
+      getTeamAverages(fixture.teams.away.id)
+    ]);
+    buildAndRenderModel(
+      fixture.teams.home.name, fixture.teams.away.name,
+      homeStats, awayStats
+    );
+    statusEl.textContent = "Análisis completo.";
+    statusEl.className = "status ok";
+  } catch(err){
+    statusEl.textContent = "Error obteniendo estadísticas: " + err.message;
+    statusEl.className = "status err";
+  } finally {
+    $("analyzeBtn").disabled = false;
+  }
+}
+
+function runManualModel(){
+  const homeName = $("mHomeName").value.trim() || "Local";
+  const awayName = $("mAwayName").value.trim() || "Visitante";
+  const homeStats = {
+    avgScored: parseFloat($("mHomeScored").value) || 1.2,
+    avgConceded: parseFloat($("mHomeConceded").value) || 1.2,
+    form: []
+  };
+  const awayStats = {
+    avgScored: parseFloat($("mAwayScored").value) || 1.2,
+    avgConceded: parseFloat($("mAwayConceded").value) || 1.2,
+    form: []
+  };
+  buildAndRenderModel(homeName, awayName, homeStats, awayStats);
+}
+
+// --- Modelo Poisson ---
+function poissonPMF(lambda, k){
+  return Math.pow(lambda, k) * Math.exp(-lambda) / factorial(k);
+}
+function factorial(n){ return n <= 1 ? 1 : n * factorial(n-1); }
+
+function buildAndRenderModel(homeName, awayName, homeStats, awayStats){
+  const LEAGUE_AVG = 1.35; // promedio de goles por equipo en torneos de selecciones tipo Mundial
+  const HOME_ADV = 1.08;   // ligera ventaja, mundiales son semi-neutrales salvo sede
+
+  const attackHome = homeStats.avgScored / LEAGUE_AVG;
+  const defenseAway = awayStats.avgConceded / LEAGUE_AVG;
+  const attackAway = awayStats.avgScored / LEAGUE_AVG;
+  const defenseHome = homeStats.avgConceded / LEAGUE_AVG;
+
+  const lambdaHome = attackHome * defenseAway * LEAGUE_AVG * HOME_ADV;
+  const lambdaAway = attackAway * defenseHome * LEAGUE_AVG;
+
+  const MAX_GOALS = 6;
+  const matrix = [];
+  for(let h=0; h<=MAX_GOALS; h++){
+    const row = [];
+    for(let a=0; a<=MAX_GOALS; a++){
+      row.push(poissonPMF(lambdaHome,h) * poissonPMF(lambdaAway,a));
+    }
+    matrix.push(row);
+  }
+
+  currentModel = { homeName, awayName, homeStats, awayStats, lambdaHome, lambdaAway, matrix };
+  renderResults();
+}
+
+function renderResults(){
+  const m = currentModel;
+  $("resultsWrap").classList.remove("hidden");
+
+  $("matchupDisplay").innerHTML = `
+    <div class="team"><div class="team-name">${m.homeName}</div>
+      <div class="team-form">${formBadges(m.homeStats.form)}</div></div>
+    <div class="vs">λ ${m.lambdaHome.toFixed(2)} — ${m.lambdaAway.toFixed(2)} λ</div>
+    <div class="team"><div class="team-name">${m.awayName}</div>
+      <div class="team-form">${formBadges(m.awayStats.form)}</div></div>
+  `;
+
+  $("statGrid").innerHTML = `
+    <div class="stat-box"><div class="v">${m.homeStats.avgScored.toFixed(2)}</div><div class="l">GF local</div></div>
+    <div class="stat-box"><div class="v">${m.homeStats.avgConceded.toFixed(2)}</div><div class="l">GC local</div></div>
+    <div class="stat-box"><div class="v">${(m.lambdaHome+m.lambdaAway).toFixed(2)}</div><div class="l">Goles esp.</div></div>
+    <div class="stat-box"><div class="v">${m.awayStats.avgScored.toFixed(2)}</div><div class="l">GF visita</div></div>
+    <div class="stat-box"><div class="v">${m.awayStats.avgConceded.toFixed(2)}</div><div class="l">GC visita</div></div>
+    <div class="stat-box"><div class="v">${goalDiffLabel(m)}</div><div class="l">Favorito</div></div>
+  `;
+
+  renderHeatmap(m.matrix);
+  renderTopScores(m.matrix);
+  renderMarkets(m);
+}
+
+function formBadges(form){
+  if(!form || !form.length) return "sin datos recientes";
+  return form.map(r => r).join(" · ");
+}
+function goalDiffLabel(m){
+  const diff = m.lambdaHome - m.lambdaAway;
+  if(Math.abs(diff) < 0.15) return "Parejo";
+  return diff > 0 ? m.homeName.slice(0,10) : m.awayName.slice(0,10);
+}
+
+function renderHeatmap(matrix){
+  const flat = matrix.flat();
+  const max = Math.max(...flat);
+  let html = `<div class="heatmap">`;
+  html += `<div></div>`;
+  for(let a=0;a<matrix[0].length;a++) html += `<div class="hlabel">${a}</div>`;
+  matrix.forEach((row, h) => {
+    html += `<div class="hlabel">${h}</div>`;
+    row.forEach((p) => {
+      const intensity = p / max;
+      const color = intensityColor(intensity);
+      html += `<div class="hcell" style="background:${color}">${(p*100).toFixed(0)}</div>`;
+    });
+  });
+  html += `</div>`;
+  $("heatmapWrap").innerHTML = html;
+}
+function intensityColor(t){
+  const r = Math.round(46 + t*(90-46));
+  const g = Math.round(30 + t*(160-30));
+  const b = Math.round(50 + t*(255-50));
+  return `rgba(${r},${g},${b},${0.25+t*0.75})`;
+}
+
+function renderTopScores(matrix){
+  const scores = [];
+  matrix.forEach((row,h) => row.forEach((p,a) => scores.push({h,a,p})));
+  scores.sort((x,y) => y.p - x.p);
+  const top5 = scores.slice(0,5);
+  const maxP = top5[0].p;
+  $("topScores").innerHTML = top5.map((s,i) => `
+    <div class="score-row">
+      <div class="score-rank">#${i+1}</div>
+      <div class="score-val">${s.h}-${s.a}</div>
+      <div class="score-bar-wrap"><div class="score-bar" style="width:${(s.p/maxP*100)}%"></div></div>
+      <div class="score-pct">${(s.p*100).toFixed(1)}%</div>
+    </div>
+  `).join("");
+}
+
+function renderMarkets(m){
+  const matrix = m.matrix;
+  let homeWin=0, draw=0, awayWin=0, over25=0, btts=0;
+  matrix.forEach((row,h) => row.forEach((p,a) => {
+    if(h>a) homeWin+=p; else if(h===a) draw+=p; else awayWin+=p;
+    if(h+a > 2.5) over25 += p;
+    if(h>0 && a>0) btts += p;
+  }));
+
+  const markets = [
+    { name: `Gana ${m.homeName}`, pct: homeWin },
+    { name: "Empate", pct: draw },
+    { name: `Gana ${m.awayName}`, pct: awayWin },
+    { name: "Más de 2.5 goles", pct: over25 },
+    { name: "Menos de 2.5 goles", pct: 1-over25 },
+    { name: "Ambos anotan (BTTS)", pct: btts },
+  ];
+  markets.sort((a,b) => b.pct - a.pct);
+
+  $("marketsList").innerHTML = markets.map(mk => {
+    const confClass = mk.pct > 0.45 ? "conf-high" : mk.pct > 0.3 ? "conf-mid" : "conf-low";
+    const confLabel = mk.pct > 0.45 ? "Alta" : mk.pct > 0.3 ? "Media" : "Baja";
+    return `
+      <div class="bet-card">
+        <div>
+          <div class="name">${mk.name}</div>
+          <div class="conf">${(mk.pct*100).toFixed(1)}% probabilidad modelo</div>
+        </div>
+        <div class="conf-pill ${confClass}">${confLabel}</div>
+      </div>
+    `;
+  }).join("");
+}
+</script>
+</body>
+</html>
