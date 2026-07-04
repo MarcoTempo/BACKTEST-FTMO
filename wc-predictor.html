@@ -113,9 +113,9 @@
 
   <div class="card" id="apiCard">
     <h2>Conexión de datos</h2>
-    <label>API Key de API-Football (RapidAPI)</label>
+    <label>API Key de football-data.org</label>
     <input type="password" id="apiKey" placeholder="Pega tu key aquí">
-    <div class="help">Gratis en <a href="https://rapidapi.com/api-sports/api/api-football" target="_blank">rapidapi.com/api-sports/api-football</a> (100 requests/día). La key sólo vive en esta sesión del navegador, no se guarda ni se envía a ningún lado más que a la API.</div>
+    <div class="help">Gratis en <a href="https://www.football-data.org/client/register" target="_blank">football-data.org/client/register</a> — te llega por correo al instante, sin tarjeta. Incluye el Mundial gratis para siempre (10 llamadas/min). Sólo vive en esta sesión del navegador.</div>
     <button class="btn" id="loadFixturesBtn">Cargar próximos partidos</button>
     <div class="status" id="apiStatus"></div>
     <div class="toggle-manual" id="manualToggle">¿No tienes API key? Ingresa datos manualmente →</div>
@@ -178,9 +178,8 @@
 </div>
 
 <script>
-const API_HOST = "api-football-v1.p.rapidapi.com";
-const WC_LEAGUE_ID = 1; // World Cup en API-Football
-const SEASON = 2026;
+const API_BASE = "https://api.football-data.org/v4";
+const WC_CODE = "WC"; // Código del Mundial en football-data.org
 
 let apiKey = "";
 let fixturesData = [];
@@ -197,17 +196,17 @@ $("analyzeBtn").addEventListener("click", analyzeSelectedFixture);
 $("manualCalcBtn").addEventListener("click", runManualModel);
 
 async function apiFetch(path, params){
-  const url = `https://${API_HOST}/v3${path}?${new URLSearchParams(params)}`;
+  const qs = params ? `?${new URLSearchParams(params)}` : "";
+  const url = `${API_BASE}${path}${qs}`;
   const res = await fetch(url, {
     headers: {
-      "X-RapidAPI-Key": apiKey,
-      "X-RapidAPI-Host": API_HOST
+      "X-Auth-Token": apiKey
     }
   });
   if(!res.ok) throw new Error(`Error API (${res.status})`);
   const json = await res.json();
-  if(json.errors && Object.keys(json.errors).length) throw new Error(JSON.stringify(json.errors));
-  return json.response;
+  if(json.errorCode) throw new Error(json.message || "Error desconocido de la API");
+  return json;
 }
 
 async function loadFixtures(){
@@ -223,28 +222,25 @@ async function loadFixtures(){
   $("loadFixturesBtn").disabled = true;
 
   try {
-    const now = new Date().toISOString().slice(0,10);
-    const future = new Date(Date.now() + 1000*60*60*24*30).toISOString().slice(0,10);
-    const data = await apiFetch("/fixtures", {
-      league: WC_LEAGUE_ID, season: SEASON, from: now, to: future
-    });
-    if(!data.length){
-      statusEl.textContent = "No hay partidos próximos listados todavía para este rango de fechas.";
+    const data = await apiFetch(`/competitions/${WC_CODE}/matches`, { status: "SCHEDULED" });
+    const matches = data.matches || [];
+    if(!matches.length){
+      statusEl.textContent = "No hay partidos próximos listados todavía.";
       statusEl.className = "status err";
       return;
     }
-    fixturesData = data;
+    fixturesData = matches;
     const sel = $("fixtureSelect");
     sel.innerHTML = "";
-    data.forEach((f, i) => {
+    matches.forEach((m, i) => {
       const opt = document.createElement("option");
-      const date = new Date(f.fixture.date).toLocaleDateString("es-MX",{day:"2-digit",month:"short"});
+      const date = new Date(m.utcDate).toLocaleDateString("es-MX",{day:"2-digit",month:"short"});
       opt.value = i;
-      opt.textContent = `${f.teams.home.name} vs ${f.teams.away.name} · ${date}`;
+      opt.textContent = `${m.homeTeam.name} vs ${m.awayTeam.name} · ${date}`;
       sel.appendChild(opt);
     });
     $("fixturesCard").classList.remove("hidden");
-    statusEl.textContent = `${data.length} partidos cargados.`;
+    statusEl.textContent = `${matches.length} partidos cargados.`;
     statusEl.className = "status ok";
   } catch(err){
     statusEl.textContent = "No se pudo conectar: " + err.message + ". Verifica tu key o usa el modo manual.";
@@ -255,15 +251,16 @@ async function loadFixtures(){
 }
 
 async function getTeamAverages(teamId){
-  // Últimos 15 partidos jugados por el equipo, cualquier competencia, para muestra real de forma
-  const fixtures = await apiFetch("/fixtures", { team: teamId, last: 15 });
+  // Partidos finalizados recientes del equipo (Mundial + eliminatorias que cubra la API) para muestra real de forma
+  const data = await apiFetch(`/teams/${teamId}/matches`, { status: "FINISHED", limit: 15 });
+  const matches = data.matches || [];
   let scored = 0, conceded = 0, played = 0;
   const form = [];
-  fixtures.forEach(f => {
-    const isHome = f.teams.home.id === teamId;
-    const gf = isHome ? f.goals.home : f.goals.away;
-    const ga = isHome ? f.goals.away : f.goals.home;
-    if(gf === null || ga === null) return;
+  matches.slice(-15).forEach(m => {
+    const isHome = m.homeTeam.id === teamId;
+    const gf = isHome ? m.score.fullTime.home : m.score.fullTime.away;
+    const ga = isHome ? m.score.fullTime.away : m.score.fullTime.home;
+    if(gf === null || ga === null || gf === undefined) return;
     scored += gf; conceded += ga; played++;
     if(gf > ga) form.push("W"); else if(gf === ga) form.push("D"); else form.push("L");
   });
@@ -271,7 +268,7 @@ async function getTeamAverages(teamId){
   return {
     avgScored: scored/played,
     avgConceded: conceded/played,
-    form: form.slice(0,5)
+    form: form.slice(-5).reverse()
   };
 }
 
@@ -285,11 +282,11 @@ async function analyzeSelectedFixture(){
 
   try {
     const [homeStats, awayStats] = await Promise.all([
-      getTeamAverages(fixture.teams.home.id),
-      getTeamAverages(fixture.teams.away.id)
+      getTeamAverages(fixture.homeTeam.id),
+      getTeamAverages(fixture.awayTeam.id)
     ]);
     buildAndRenderModel(
-      fixture.teams.home.name, fixture.teams.away.name,
+      fixture.homeTeam.name, fixture.awayTeam.name,
       homeStats, awayStats
     );
     statusEl.textContent = "Análisis completo.";
